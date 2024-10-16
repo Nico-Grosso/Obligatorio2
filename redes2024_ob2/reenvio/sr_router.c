@@ -68,6 +68,8 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         char *interface /* lent */,
         sr_ethernet_hdr_t *eHdr) {
 
+        sr_ip_hdr_t* ipHdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
   /* 
   * COLOQUE ASÍ SU CÓDIGO
   * SUGERENCIAS: 
