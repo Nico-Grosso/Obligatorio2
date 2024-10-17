@@ -68,7 +68,18 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         char *interface /* lent */,
         sr_ethernet_hdr_t *eHdr) {
 
-        sr_ip_hdr_t* ipHdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); //cabecera IP
+  uint16_t length = ip_hdr->ip_len; // tamanio de la cabecera IP
+  uint8_t* src_ip = ip_hdr->ip_src; // direccion origen IP 
+  uint8_t* dest_ip = ip_hdr->ip_dst; // direccion destino IP
+
+  int not_sent_to_self = sr_get_interface_given_ip(sr, dest_ip); // devuelve 0 si el router no es destino
+
+  if (not_sent_to_self == 0){ // el paquete tiene destino de otro router/host
+
+  }else{ // el paquete tiene destino al router actual
+    
+  }
 
   /* 
   * COLOQUE ASÍ SU CÓDIGO
