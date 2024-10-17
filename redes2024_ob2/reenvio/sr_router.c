@@ -72,13 +72,23 @@ void sr_handle_ip_packet(struct sr_instance *sr,
   uint16_t length = ip_hdr->ip_len; // tamanio de la cabecera IP
   uint8_t* src_ip = ip_hdr->ip_src; // direccion origen IP 
   uint8_t* dest_ip = ip_hdr->ip_dst; // direccion destino IP
+  uint8_t protocol = ip_protocol(ip_hdr); // que protocolo llega en el paquete (ICMP, TCP, etc)
 
-  int not_sent_to_self = sr_get_interface_given_ip(sr, dest_ip); // devuelve 0 si el router no es destino
+  struct sr_if* iface = sr_get_interface_given_ip(sr, dest_ip); // devuelve 0 si el router no es destino
 
-  if (not_sent_to_self == 0){ // el paquete tiene destino de otro router/host
+  if (iface == NULL){ // el paquete tiene destino de otro router/host
 
   }else{ // el paquete tiene destino al router actual
-    
+    if (protocol == ip_protocol_icmp){
+      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); // accedo al header del ICMP
+
+      if (icmp_hdr->icmp_type == 0){ // ECHO REQUEST
+        
+      }else{ // es un paquete TCP/UDP
+
+      }
+    }
+
   }
 
   /* 
