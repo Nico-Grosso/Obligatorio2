@@ -124,6 +124,37 @@ void sr_handle_ip_packet(struct sr_instance *sr,
           sr_send_icmp_error_packet(3, 0, sr, ip_hdr->ip_src, packet); // Tipo 3, Código 0
           return;
       }
+
+      /* Obtener la dirección IP del siguiente salto */
+      uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;
+
+      /* Obtener la interfaz de salida */
+      struct sr_if* out_interface = sr_get_interface(sr, matching_rt_entry->interface);
+
+      /* Verificar la caché ARP */
+      struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), next_hop_ip);
+
+      if (arp_entry != NULL) {
+          /* Tenemos la dirección MAC, proceder a enviar el paquete */
+
+          /* Construir la cabecera Ethernet con las direcciones MAC adecuadas */
+          sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)packet;
+
+          /* Establecer la dirección de destino Ethernet a la dirección MAC de la caché ARP */
+          memcpy(eth_hdr->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
+
+          /* Establecer la dirección de origen Ethernet a la dirección MAC de la interfaz de salida */
+          memcpy(eth_hdr->ether_shost, out_interface->addr, ETHER_ADDR_LEN);
+
+          /* Enviar el paquete */
+          sr_send_packet(sr, packet, len, out_interface->name);
+
+          free(arp_entry);
+
+      } else {
+          /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
+          
+      }      
   } else {
       /* El paquete está destinado al propio router */
       /* Manejar solicitudes ICMP echo */
