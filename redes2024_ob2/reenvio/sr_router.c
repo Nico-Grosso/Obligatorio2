@@ -60,6 +60,23 @@ void sr_send_icmp_error_packet(uint8_t type,
 
 } /* -- sr_send_icmp_error_packet -- */
 
+struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
+
+  struct sr_rt* best_match = NULL;
+  struct sr_rt* row_walker = sr->routing_table;
+
+  while (row_walker != NULL){
+    if((dest_ip & row_walker->mask.s_addr) == row_walker->dest.s_addr){ /* si coincide el prefijo */
+      if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
+        best_match = row_walker;
+      }
+    }
+    row_walker = row_walker->next;
+  }
+
+  return best_match;
+}
+
 void sr_handle_ip_packet(struct sr_instance *sr,
         uint8_t *packet /* lent */,
         unsigned int len,
@@ -68,25 +85,28 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         char *interface /* lent */,
         sr_ethernet_hdr_t *eHdr) {
 
-  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); //cabecera IP
-  uint16_t length = ip_hdr->ip_len; // tamanio de la cabecera IP
-  uint8_t* src_ip = ip_hdr->ip_src; // direccion origen IP 
-  uint8_t* dest_ip = ip_hdr->ip_dst; // direccion destino IP
-  uint8_t protocol = ip_protocol(ip_hdr); // que protocolo llega en el paquete (ICMP, TCP, etc)
+  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /*cabecera IP*/
+  uint16_t length = ip_hdr->ip_len; /*tamanio de la cabecera IP*/ 
+  uint32_t src_ip = ip_hdr->ip_src; /*direccion origen IP*/  
+  uint32_t dest_ip = ip_hdr->ip_dst; /*direccion destino IP*/ 
+  uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /*que protocolo llega en el paquete (ICMP, TCP, etc)*/ 
 
-  struct sr_if* iface = sr_get_interface_given_ip(sr, dest_ip); // devuelve 0 si el router no es destino
+  struct sr_if* iface = sr_get_interface_given_ip(sr, dest_ip); /*devuelve 0 si el router no es destino*/ 
 
-  if (iface == NULL){ // el paquete tiene destino de otro router/host
+  if (iface == NULL){ /*el paquete tiene destino de otro router/host*/ 
+    struct sr_rt* best_match = lpm(sr, dest_ip);
 
-  }else{ // el paquete tiene destino al router actual
+  }else{ /*el paquete tiene destino al router actual*/ 
     if (protocol == ip_protocol_icmp){
-      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); // accedo al header del ICMP
+      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
 
-      if (icmp_hdr->icmp_type == 0){ // ECHO REQUEST
+      if (icmp_hdr->icmp_type == 0){ /*ECHO REQUEST*/ 
         
-      }else{ // es un paquete TCP/UDP
-
+      }else{
+        
       }
+    }else{ /*es cualquier otro paquete, enviar ICMP error*/ 
+
     }
 
   }
