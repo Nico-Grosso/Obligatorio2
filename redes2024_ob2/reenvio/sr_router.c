@@ -60,6 +60,23 @@ void sr_send_icmp_error_packet(uint8_t type,
 
 } /* -- sr_send_icmp_error_packet -- */
 
+struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
+
+  struct sr_rt* best_match = NULL;
+  struct sr_rt* row_walker = sr->routing_table;
+
+  while (row_walker != NULL){
+    if((dest_ip & row_walker->mask.s_addr) == row_walker->dest.s_addr){ /* si coincide el prefijo */
+      if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
+        best_match = row_walker;
+      }
+    }
+    row_walker = row_walker->next;
+  }
+
+  return best_match;
+}
+
 void sr_handle_ip_packet(struct sr_instance *sr,
         uint8_t *packet /* lent */,
         unsigned int len,
@@ -68,18 +85,17 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         char *interface /* lent */,
         sr_ethernet_hdr_t *eHdr) {
 
-  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); //cabecera IP
-  uint8_t ip_header_length = ip_hdr->ip_hl * 4; // tamanio de la cabecera IP en bytes
-  uint32_t src_ip = ip_hdr->ip_src; // direccion origen IP 
-  uint32_t dest_ip = ip_hdr->ip_dst; // direccion destino IP
+  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /* cabecera IP */
+  uint16_t total_length = ip_hdr->ip_len; /* tamanio del paquete */ 
+  uint8_t ip_header_length = ip_hdr->ip_hl * 4; /* tamanio de la cabecera IP en bytes */
+  uint32_t src_ip = ip_hdr->ip_src; /* direccion origen IP */  
+  uint32_t dest_ip = ip_hdr->ip_dst; /* direccion destino IP */
+  uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, etc) */  
 
   /* Verificar si el paquete está destinado a una de las interfaces del router */
-  struct sr_if* iface = sr_get_interface_given_ip(sr, ip_hdr->ip_dst);
+  struct sr_if* iface = sr_get_interface_given_ip(sr, ip_hdr->ip_dst); /* devuelve 0 si el router no es destino */ 
 
-  if (iface != NULL) {
-      /* El paquete está destinado al propio router */
-      /* Manejar solicitudes ICMP echo u otros tipos si es necesario */
-  } else {
+  if (iface == NULL) {
       /* El paquete no está destinado al router, proceder con el reenvío */
 
       /* Decrementar TTL */
@@ -101,12 +117,27 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         a formato de host (little-endian en la mayoría de las máquinas).
       */
       // dest_ip = ntohl(ip_hdr->ip_dst);
-      struct sr_rt* matching_rt_entry = sr_find_longest_prefix_match(sr, dest_ip);
+      struct sr_rt* matching_rt_entry = lpm(sr, dest_ip);
 
       if (matching_rt_entry == NULL) {
           /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
           sr_send_icmp_error_packet(3, 0, sr, ip_hdr->ip_src, packet); // Tipo 3, Código 0
           return;
+      }
+  } else {
+      /* El paquete está destinado al propio router */
+      /* Manejar solicitudes ICMP echo */
+      
+      if (protocol == ip_protocol_icmp){
+        sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
+
+        if (icmp_hdr->icmp_type == 0){ /*ECHO REQUEST*/ 
+          
+        } else {
+          
+        }
+      } else { /*es cualquier otro paquete, enviar ICMP error*/ 
+
       }
   }
 
