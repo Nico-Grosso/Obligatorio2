@@ -69,16 +69,45 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         sr_ethernet_hdr_t *eHdr) {
 
   sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); //cabecera IP
-  uint16_t length = ip_hdr->ip_len; // tamanio de la cabecera IP
-  uint8_t* src_ip = ip_hdr->ip_src; // direccion origen IP 
-  uint8_t* dest_ip = ip_hdr->ip_dst; // direccion destino IP
+  uint8_t ip_header_length = ip_hdr->ip_hl * 4; // tamanio de la cabecera IP en bytes
+  uint32_t src_ip = ip_hdr->ip_src; // direccion origen IP 
+  uint32_t dest_ip = ip_hdr->ip_dst; // direccion destino IP
 
-  int not_sent_to_self = sr_get_interface_given_ip(sr, dest_ip); // devuelve 0 si el router no es destino
+  /* Verificar si el paquete está destinado a una de las interfaces del router */
+  struct sr_if* iface = sr_get_interface_given_ip(sr, ip_hdr->ip_dst);
 
-  if (not_sent_to_self == 0){ // el paquete tiene destino de otro router/host
+  if (iface != NULL) {
+      /* El paquete está destinado al propio router */
+      /* Manejar solicitudes ICMP echo u otros tipos si es necesario */
+  } else {
+      /* El paquete no está destinado al router, proceder con el reenvío */
 
-  }else{ // el paquete tiene destino al router actual
-    
+      /* Decrementar TTL */
+      ip_hdr->ip_ttl--;
+
+      if (ip_hdr->ip_ttl == 0) {
+          /* TTL expirado, enviar mensaje ICMP Tiempo Excedido al remitente */
+          sr_send_icmp_error_packet(11, 0, sr, src_ip, packet); // Tipo 11, Código 0
+          return;
+      }
+
+      /* Recalcular checksum del header modificado */
+      ip_hdr->ip_sum = 0;
+      ip_hdr->ip_sum = cksum(ip_hdr, ip_header_length);
+
+      /* Buscar la entrada de la tabla de enrutamiento con la coincidencia de prefijo más larga */
+      /* TODO: Averiguar si es necesario usar ntohl 
+        ntohl(): Esta función convierte el valor de 32 bits de formato de red (big-endian)
+        a formato de host (little-endian en la mayoría de las máquinas).
+      */
+      // dest_ip = ntohl(ip_hdr->ip_dst);
+      struct sr_rt* matching_rt_entry = sr_find_longest_prefix_match(sr, dest_ip);
+
+      if (matching_rt_entry == NULL) {
+          /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
+          sr_send_icmp_error_packet(3, 0, sr, ip_hdr->ip_src, packet); // Tipo 3, Código 0
+          return;
+      }
   }
 
   /* 
