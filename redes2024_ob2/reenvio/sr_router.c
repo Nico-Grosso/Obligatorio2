@@ -160,16 +160,10 @@ void sr_handle_ip_packet(struct sr_instance *sr,
   } else {
       /* El paquete está destinado al propio router */
       /* Manejar solicitudes ICMP echo */
-      
-      /* Verificamos que el tamaño del paquete IP es válido */
-      if (len < sizeof(sr_ip_hdr_t)) {
-          fprintf(stderr, "Paquete IP demasiado pequeño\n");
-          return;
-      }
-
-      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
 
       if (protocol == ip_protocol_icmp){
+        sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
+
         /* Verificamos si el paquete es un ICMP ECHO REQUEST */
         if (icmp_hdr->icmp_type == icmp_echo_request){
           printf("Recibido ICMP echo request, respondiendo con echo reply\n");
