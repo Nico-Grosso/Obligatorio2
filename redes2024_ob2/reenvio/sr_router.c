@@ -49,11 +49,11 @@ void sr_init(struct sr_instance* sr)
 } /* -- sr_init -- */
 
 /* Envía un paquete ICMP de error */
-void sr_send_icmp_error_packet(uint8_t type,  // Tipo de mensaje ICMP
-                              uint8_t code, // Código dentro del tipo ICMP
+void sr_send_icmp_error_packet(uint8_t type,          // Tipo de mensaje ICMP
+                              uint8_t code,           // Código dentro del tipo ICMP
                               struct sr_instance *sr, // Puntero a la instancia del router
-                              uint32_t ipDst, // Dirección IP de destino a la que se enviará el paquete ICMP
-                              uint8_t *ipPacket) // Paquete IP original que causó el error
+                              uint32_t ipDst,         // Dirección IP de destino a la que se enviará el paquete ICMP
+                              uint8_t *ipPacket)      // Paquete IP original que causó el error
 {
 
   /* COLOQUE AQUÍ SU CÓDIGO*/
@@ -77,13 +77,13 @@ struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
   return best_match;
 }
 
-void sr_handle_ip_packet(struct sr_instance *sr,
-        uint8_t *packet /* lent */,
-        unsigned int len,
-        uint8_t *srcAddr,
-        uint8_t *destAddr,
-        char *interface /* lent */,
-        sr_ethernet_hdr_t *eHdr) {
+void sr_handle_ip_packet(struct sr_instance *sr,  // Puntero a la instancia del router
+        uint8_t *packet /* lent */,               // Puntero al paquete recibido (paquete IP)
+        unsigned int len,                         // longitut total del paquete (en bytes)
+        uint8_t *srcAddr,                         // Dirección IP de origen del paquete
+        uint8_t *destAddr,                        // Dirección IP de destino del paquete
+        char *interface /* lent */,               // Nombre de la interfaz de red (eth0, eth1)
+        sr_ethernet_hdr_t *eHdr) {                // Puntero al encabezado Ethernet del paquete
 
   sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /* cabecera IP */
   uint16_t total_length = ip_hdr->ip_len; /* tamanio del paquete */ 
