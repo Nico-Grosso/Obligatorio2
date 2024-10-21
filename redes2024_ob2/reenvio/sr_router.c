@@ -103,7 +103,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,
 
       if (ip_hdr->ip_ttl == 0) {
           /* TTL expirado, enviar mensaje ICMP Tiempo Excedido al remitente */
-          sr_send_icmp_error_packet(11, 0, sr, src_ip, packet); // Tipo 11, Código 0
+          sr_send_icmp_error_packet(11, 0, sr, src_ip, packet); /* Tipo 11, Código 0 */ 
           return;
       }
 
@@ -116,17 +116,17 @@ void sr_handle_ip_packet(struct sr_instance *sr,
         ntohl(): Esta función convierte el valor de 32 bits de formato de red (big-endian)
         a formato de host (little-endian en la mayoría de las máquinas).
       */
-      // dest_ip = ntohl(ip_hdr->ip_dst);
+      /*dest_ip = ntohl(ip_hdr->ip_dst);*/ 
       struct sr_rt* matching_rt_entry = lpm(sr, dest_ip);
 
       if (matching_rt_entry == NULL) {
           /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
-          sr_send_icmp_error_packet(3, 0, sr, ip_hdr->ip_src, packet); // Tipo 3, Código 0
+          sr_send_icmp_error_packet(3, 0, sr, ip_hdr->ip_src, packet); /*Tipo 3, Código 0*/ 
           return;
       }
 
       /* Obtener la dirección IP del siguiente salto */
-      uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;
+      uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
 
       /* Obtener la interfaz de salida */
       struct sr_if* out_interface = sr_get_interface(sr, matching_rt_entry->interface);
@@ -153,24 +153,21 @@ void sr_handle_ip_packet(struct sr_instance *sr,
 
       } else {
           /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
+
+          
           
       }      
   } else {
       /* El paquete está destinado al propio router */
       /* Manejar solicitudes ICMP echo */
-      
-      if (protocol == ip_protocol_icmp){
-        sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
+      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
 
-        if (icmp_hdr->icmp_type == 0){ /*ECHO REQUEST*/ 
-          
-        } else {
-          
-        }
-      } else { /*es cualquier otro paquete, enviar ICMP error*/ 
+      if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == 8 && icmp_hdr->icmp_code == 0){ /* ECHO REQUEST */
 
+      } else { /*es cualquier otro paquete, enviar ICMP error PORT UNREACHABLE*/ 
+        sr_send_icmp_error_packet(3, 3, sr, src_ip, packet);
       }
-  }
+  } 
 
   /* 
   * COLOQUE ASÍ SU CÓDIGO
