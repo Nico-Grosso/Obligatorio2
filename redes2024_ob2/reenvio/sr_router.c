@@ -171,7 +171,8 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
       } else {
           /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
           printf("No se encontró entrada ARP, enviando solicitud ARP\n");
-          sr_arpcache_queuereq(&(sr->cache), next_hop_ip, packet, len, matching_rt_entry->interface);
+          struct sr_arpreq* req = sr_arpcache_queuereq(&(sr->cache), next_hop_ip, packet, len, matching_rt_entry->interface);
+          handle_arpreq(sr, req);
       }      
   } else {
       /* El paquete está destinado al propio router */
