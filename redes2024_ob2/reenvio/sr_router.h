@@ -30,17 +30,6 @@
 #define INIT_TTL 255
 #define PACKET_DUMP_SIZE 1024
 
-/* Constantes ICMP Type */
-#define icmp_echo_reply 0           /* Respuesta de eco (ping reply) */
-#define icmp_echo_request 8         /* Solicitud de eco (ping request) */
-#define icmp_type_time_exceeded 11  /* Tiempo Excedido*/
-#define icmp_type_dest_unreachable 3 /* Destino inalcanzable */
-
-/* Códigos ICMP para Destination Unreachable */
-#define icmp_code_net_unreachable 0
-#define icmp_code_host_unreachable 1
-#define icmp_code_port_unreachable 3
-
 /* forward declare */
 struct sr_if;
 struct sr_rt;
