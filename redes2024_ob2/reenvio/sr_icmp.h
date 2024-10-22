@@ -26,6 +26,6 @@
 /* generar paquete ICMP */
 
 uint8_t *generate_icmp_packet(uint8_t type, uint8_t code, uint8_t* packet, struct sr_instance* sr, struct sr_if* interface);
-
+uint8_t *generate_icmp_packet_t3(uint8_t type, uint8_t code, uint8_t* packet, struct sr_instance* sr, struct sr_if* interface);
 
 #endif

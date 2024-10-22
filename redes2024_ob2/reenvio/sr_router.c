@@ -50,11 +50,11 @@ void sr_init(struct sr_instance* sr)
 } /* -- sr_init -- */
 
 /* Envía un paquete ICMP de error */
-void sr_send_icmp_error_packet(uint8_t type,          /*Tipo de mensaje ICMP*/ 
-                              uint8_t code,           /*Código dentro del tipo ICMP*/ 
-                              struct sr_instance *sr, /*Puntero a la instancia del router*/ 
-                              uint32_t ipDst,         /*Dirección IP de destino a la que se enviará el paquete ICMP*/ 
-                              uint8_t *ipPacket)      /*Paquete IP original que causó el error*/ 
+void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */ 
+                              uint8_t code,           /* Código dentro del tipo ICMP */
+                              struct sr_instance *sr, /* Puntero a la instancia del router */
+                              uint32_t ipDst,         /* Dirección IP de destino a la que se enviará el paquete ICMP */
+                              uint8_t *ipPacket)      /* Paquete IP original que causó el error */
 {
   struct sr_if* interface; 
   struct sr_if* if_walker = sr->if_list;
@@ -66,9 +66,13 @@ void sr_send_icmp_error_packet(uint8_t type,          /*Tipo de mensaje ICMP*/
           interface = if_walker;
       }
   }
-  uint8_t* icmp_packet = generate_icmp_packet(type, code, ipPacket, sr, interface);
-  sr_ip_hdr_t* ipHdr = (sr_ip_hdr_t*) (icmp_packet + sizeof(sr_ethernet_hdr_t));
-  sr_send_packet(sr, icmp_packet, ipHdr->ip_len, interface->name);
+  uint8_t* icmp_packet = generate_icmp_packet_t3(type, code, ipPacket, sr, interface);
+
+  unsigned int icmp_len_t3 = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+
+  sr_send_packet(sr, icmp_packet, icmp_len_t3, interface->name);
+
+  /*free(icmp_packet);*/          /*¿liberamos aca?*/
 
 } /* -- sr_send_icmp_error_packet -- */
 
@@ -87,15 +91,15 @@ struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
   }
 
   return best_match;
-}
+} /* -- lpm -- */
 
-void sr_handle_ip_packet(struct sr_instance *sr,  /*Puntero a la instancia del router*/ 
-        uint8_t *packet /* lent */,               /*Puntero al paquete recibido (paquete IP)*/ 
-        unsigned int len,                         /*longitut total del paquete (en bytes)*/ 
-        uint8_t *srcAddr,                         /*Dirección IP de origen del paquete*/ 
-        uint8_t *destAddr,                        /*Dirección IP de destino del paquete*/
-        char *interface /* lent */,               /*Nombre de la interfaz de red (eth0, eth1)*/
-        sr_ethernet_hdr_t *eHdr) {                /*Puntero al encabezado Ethernet del paquete*/ 
+void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del router */ 
+        uint8_t *packet /* lent */,               /* Puntero al paquete recibido (paquete IP) */ 
+        unsigned int len,                         /* Longitut total del paquete (en bytes) */ 
+        uint8_t *srcAddr,                         /* Dirección IP de origen del paquete */ 
+        uint8_t *destAddr,                        /* Dirección IP de destino del paquete */
+        char *interface /* lent */,               /* Nombre de la interfaz de red (eth0, eth1) */
+        sr_ethernet_hdr_t *eHdr) {                /* Puntero al encabezado Ethernet del paquete */ 
 
   sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /* cabecera IP */
   uint16_t total_length = ip_hdr->ip_len; /* tamanio del paquete */ 
@@ -177,7 +181,15 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /*Puntero a la instancia del r
       if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request){ /* verificamos si el paquete es ECHO REQUEST */
 
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
-        /*sr_send_icmp_echo_reply(sr, packet, len, iface->name); */ 
+        
+        uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, iface);
+
+        unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+
+        /* Enviar el paquete */
+        sr_send_packet(sr, icmp_packet, icmp_len, iface->name);
+
+        /*free(icmp_packet);*/          /*¿liberamos aca?*/
        
       } else { /*es cualquier otro paquete, enviar ICMP error*/ 
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
