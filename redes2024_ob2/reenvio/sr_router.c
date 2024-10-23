@@ -49,6 +49,23 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
+struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
+
+  struct sr_rt* best_match = NULL;
+  struct sr_rt* row_walker = sr->routing_table;
+
+  while (row_walker != NULL){
+    if((dest_ip & row_walker->mask.s_addr) == row_walker->dest.s_addr){ /* si coincide el prefijo */
+      if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
+        best_match = row_walker;
+      }
+    }
+    row_walker = row_walker->next;
+  }
+
+  return best_match;
+} /* -- lpm -- */
+
 /* Envía un paquete ICMP de error */
 void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */ 
                               uint8_t code,           /* Código dentro del tipo ICMP */
@@ -68,23 +85,6 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   /*free(icmp_packet);*/          /* TODO: ¿liberamos aca?*/
 
 } /* -- sr_send_icmp_error_packet -- */
-
-struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
-
-  struct sr_rt* best_match = NULL;
-  struct sr_rt* row_walker = sr->routing_table;
-
-  while (row_walker != NULL){
-    if((dest_ip & row_walker->mask.s_addr) == row_walker->dest.s_addr){ /* si coincide el prefijo */
-      if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
-        best_match = row_walker;
-      }
-    }
-    row_walker = row_walker->next;
-  }
-
-  return best_match;
-} /* -- lpm -- */
 
 void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del router */ 
         uint8_t *packet /* lent */,               /* Puntero al paquete recibido (paquete IP) */ 
@@ -135,7 +135,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
       }
 
       /* Obtener la dirección IP del siguiente salto */
-      // TODO: revisar esto
+      /*TODO: revisar esto*/ 
       uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
 
       /* Obtener la interfaz de salida */
