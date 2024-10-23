@@ -56,23 +56,16 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
                               uint32_t ipDst,         /* Dirección IP de destino a la que se enviará el paquete ICMP */
                               uint8_t *ipPacket)      /* Paquete IP original que causó el error */
 {
-  struct sr_if* interface; 
-  struct sr_if* if_walker = sr->if_list;
-  int encontrado = 0;
-  sr_ethernet_hdr_t* eHdr = (sr_ethernet_hdr_t*)(ipPacket);
-  while(if_walker != NULL && encontrado == 0){
-      if (if_walker->addr == eHdr->ether_dhost){
-          encontrado = 1;
-          interface = if_walker;
-      }
-  }
-  uint8_t* icmp_packet = generate_icmp_packet_t3(type, code, ipPacket, sr, interface);
+  struct sr_rt* matching_rt_entry = lpm(sr, ipDst);
+  struct sr_if* iface = sr_get_interface(sr, matching_rt_entry->interface);
+
+  uint8_t* icmp_packet = generate_icmp_packet_t3(type, code, ipPacket, sr, iface);
 
   unsigned int icmp_len_t3 = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 
-  sr_send_packet(sr, icmp_packet, icmp_len_t3, interface->name);
+  sr_send_packet(sr, icmp_packet, icmp_len_t3, iface->name);
 
-  /*free(icmp_packet);*/          /*¿liberamos aca?*/
+  /*free(icmp_packet);*/          /* TODO: ¿liberamos aca?*/
 
 } /* -- sr_send_icmp_error_packet -- */
 
@@ -142,6 +135,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
       }
 
       /* Obtener la dirección IP del siguiente salto */
+      // TODO: revisar esto
       uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
 
       /* Obtener la interfaz de salida */
