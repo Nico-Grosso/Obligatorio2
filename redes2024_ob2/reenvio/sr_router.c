@@ -144,7 +144,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
       /* Verificar la caché ARP */
       struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), next_hop_ip);
 
-      if (arp_entry != NULL) {
+      if (arp_entry != NULL && arp_entry->valid) {
           /* Tenemos la dirección MAC, proceder a enviar el paquete */
           printf("Entrada ARP encontrada, reenviando paquete\n");
 
@@ -171,7 +171,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
   } else {
       /* El paquete está destinado al propio router */
       /* Manejar solicitudes ICMP echo */
-      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)(ip_hdr + sizeof(sr_ip_hdr_t)); /*accedo al header del ICMP*/ 
+      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)((uint8_t *)ip_hdr + (ip_hdr->ip_hl * 4)); /*accedo al header del ICMP*/ 
 
       if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request){ /* verificamos si el paquete es ECHO REQUEST */
 
