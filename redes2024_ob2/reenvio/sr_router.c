@@ -55,7 +55,7 @@ struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
   struct sr_rt* row_walker = sr->routing_table;
 
   while (row_walker != NULL){
-    if((dest_ip & row_walker->mask.s_addr) == row_walker->dest.s_addr){ /* si coincide el prefijo */
+    if((dest_ip & row_walker->mask.s_addr) == (row_walker->dest.s_addr & row_walker->mask.s_addr)){ /* si coincide el prefijo */
       if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
         best_match = row_walker;
       }
@@ -86,7 +86,7 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
   sr_send_packet(sr, icmp_packet, icmp_len_t3, iface->name);
 
-  /*free(icmp_packet);*/          /* TODO: ¿liberamos aca?*/
+  free(icmp_packet);          /* TODO: ¿liberamos aca?*/
 
 } /* -- sr_send_icmp_error_packet -- */
 
@@ -200,7 +200,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
         /* Enviar el paquete */
         sr_send_packet(sr, icmp_packet, icmp_len, iface->name);
 
-        /*free(icmp_packet);*/          /*¿liberamos aca?*/
+        free(icmp_packet);          /*¿liberamos aca?*/
        
       } else { /*es cualquier otro paquete, enviar ICMP error*/ 
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
