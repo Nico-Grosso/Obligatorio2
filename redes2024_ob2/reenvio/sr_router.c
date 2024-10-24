@@ -13,6 +13,9 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <inttypes.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -62,7 +65,9 @@ struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
     }
     row_walker = row_walker->next;
   }
-
+  if (best_match){
+    printf("Best match LPM: %s\n", inet_ntoa(best_match->gw));
+  }
   return best_match;
 } /* -- lpm -- */
 
@@ -100,11 +105,11 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
   sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /* cabecera IP */
   uint8_t ip_header_length = ip_hdr->ip_hl * 4; /* tamanio de la cabecera IP en bytes */
-  uint32_t src_ip = ntohl(ip_hdr->ip_src); /* direccion origen IP */  
-  uint32_t dest_ip = ntohl(ip_hdr->ip_dst); /* direccion destino IP */
+  uint32_t src_ip = ip_hdr->ip_src; /* direccion origen IP */  
+  uint32_t dest_ip = ip_hdr->ip_dst; /* direccion destino IP */
   uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, etc) */  
 
-  printf("RECIBIDO");
+  printf("RECIBIDO\n");
   print_hdr_eth(packet);
   print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
 
