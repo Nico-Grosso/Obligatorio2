@@ -49,7 +49,7 @@ uint8_t *generate_icmp_packet(uint8_t type, uint8_t code, uint8_t* packet, struc
     sr_icmp_hdr_t *new_icmp_hdr = (sr_icmp_hdr_t *)(packet_icmp + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
     new_icmp_hdr->icmp_code = code;
     new_icmp_hdr->icmp_type = type;
-    memcpy(new_icmp_hdr + sizeof(sr_icmp_hdr_t), ip_hdr + sizeof(sr_icmp_hdr_t), data_len);
+    memcpy((uint8_t *) new_icmp_hdr + sizeof(sr_icmp_hdr_t),  (uint8_t *) ip_hdr +  sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t), data_len);
     new_icmp_hdr->icmp_sum = icmp_cksum(new_icmp_hdr, sizeof(sr_icmp_hdr_t) + data_len);
     
 

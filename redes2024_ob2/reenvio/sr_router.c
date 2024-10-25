@@ -193,6 +193,9 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
         print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
+
+        struct sr_rt* matching_rt_entry = lpm(sr, ip_hdr->ip_src);
+        struct sr_if* iface = sr_get_interface(sr, matching_rt_entry->interface);
         
         uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, iface);
 
@@ -202,12 +205,12 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
         sr_ip_hdr_t* ip_icmp_len = (sr_ip_hdr_t*) (icmp_packet + sizeof(sr_ethernet_hdr_t));
 
-        unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + ip_icmp_len->ip_len;
+        unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_icmp_len->ip_len);
 
         /* Enviar el paquete */
         sr_send_packet(sr, icmp_packet, icmp_len, iface->name);
 
-        /*free(icmp_packet);*/
+        free(icmp_packet);
        
       } else { /*es cualquier otro paquete, enviar ICMP error*/ 
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
