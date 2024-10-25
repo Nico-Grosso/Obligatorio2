@@ -190,6 +190,8 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
       if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request){ /* verificamos si el paquete es ECHO REQUEST */
 
+        print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
         
         uint8_t* icmp_packet = generate_icmp_packet_t3(icmp_echo_reply, 0, packet, sr, iface);
