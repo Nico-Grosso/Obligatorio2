@@ -24,7 +24,7 @@ uint8_t *generate_icmp_packet(uint8_t type, uint8_t code, uint8_t* packet, struc
     /* crear ethernet header */
     memcpy(new_eth_hdr->ether_shost, src_MAC, sizeof(uint8_t) * ETHER_ADDR_LEN);
     memcpy(new_eth_hdr->ether_dhost, dest_MAC, sizeof(uint8_t) * ETHER_ADDR_LEN);
-    new_eth_hdr->ether_type = ethertype_ip;
+    new_eth_hdr->ether_type = ntohs(ethertype_ip);
 
     /* crear ip header */
     sr_ip_hdr_t* new_ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
@@ -76,7 +76,7 @@ uint8_t *generate_icmp_packet_t3(uint8_t type,                  /* Nº de tipo d
     /* crear ethernet header */
     memcpy(new_eth_hdr->ether_shost, src_MAC, sizeof(uint8_t) * ETHER_ADDR_LEN);
     memcpy(new_eth_hdr->ether_dhost, dest_MAC, sizeof(uint8_t) * ETHER_ADDR_LEN);
-    new_eth_hdr->ether_type = ethertype_ip;
+    new_eth_hdr->ether_type = htons(ethertype_ip);
 
     /* crear ip header */
     sr_ip_hdr_t* new_ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
@@ -85,11 +85,11 @@ uint8_t *generate_icmp_packet_t3(uint8_t type,                  /* Nº de tipo d
     new_ip_hdr->ip_ttl = 16;
     new_ip_hdr->ip_hl = 5;
     new_ip_hdr->ip_v = 4;
-    new_ip_hdr->ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+    new_ip_hdr->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
     new_ip_hdr->ip_p = ip_protocol_icmp;
     new_ip_hdr->ip_src = src_ip;
     new_ip_hdr->ip_dst = dest_ip;
-    new_ip_hdr->ip_id = ip_id_counter++;
+    new_ip_hdr->ip_id = htons(ip_id_counter++);
     new_ip_hdr->ip_off = 0;
     new_ip_hdr->ip_sum = ip_cksum(new_ip_hdr, new_ip_hdr->ip_hl * 4);
 

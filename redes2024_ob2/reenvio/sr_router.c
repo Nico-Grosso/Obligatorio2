@@ -181,8 +181,6 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
           /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
           printf("No se encontró entrada ARP, enviando solicitud ARP\n");
           struct sr_arpreq* req = sr_arpcache_queuereq(&(sr->cache), next_hop_ip, packet, len, matching_rt_entry->interface);
-          print_hdr_eth(packet);
-          print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
           handle_arpreq(sr, req);
       }      
   } else {
@@ -194,10 +192,10 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
         
-        uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, iface);
+        uint8_t* icmp_packet = generate_icmp_packet_t3(icmp_echo_reply, 0, packet, sr, iface);
 
-        print_hdr_eth(packet);
-        print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
+        print_hdr_eth(icmp_packet);
+        print_hdr_ip(icmp_packet + sizeof(sr_ethernet_hdr_t));
         print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
         unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
