@@ -106,7 +106,7 @@ uint8_t *generate_icmp_packet_t3(uint8_t type,                  /* Nº de tipo d
     new_icmp_hdr->icmp_type = type;
     new_icmp_hdr->unused = 0;
     new_icmp_hdr->next_mtu = 0;
-    memcpy(new_icmp_hdr->data, ip_hdr, (ip_hdr->ip_hl * 4) + 8); /* 8 bytes para la carga útil */
+    memcpy((uint8_t*) new_icmp_hdr->data, (uint8_t*) ip_hdr, (ip_hdr->ip_hl * 4) + 8); /* 8 bytes para la carga útil */
     new_icmp_hdr->icmp_sum = icmp3_cksum(new_icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
 
     return packet_icmp;
