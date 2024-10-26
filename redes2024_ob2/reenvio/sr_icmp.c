@@ -8,8 +8,9 @@ uint8_t *generate_icmp_packet(uint8_t type, uint8_t code, uint8_t* packet, struc
     /* ETHERNET */
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*) (packet);
     /* direcciones MAC (hay que invertirlas) */
-    uint8_t* src_MAC = eth_hdr->ether_dhost; 
-    uint8_t* dest_MAC = eth_hdr->ether_shost;
+    
+    uint8_t* src_MAC = eth_hdr->ether_shost;
+    uint8_t* dest_MAC = eth_hdr->ether_dhost;
 
     /* INTERNET PROTOCOL */
     sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));

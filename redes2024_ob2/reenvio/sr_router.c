@@ -190,27 +190,59 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
       if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request){ /* verificamos si el paquete es ECHO REQUEST */
 
+        printf("Print de hdr_icmp del paquete de entrada\n");
         print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
 
         struct sr_rt* matching_rt_entry = lpm(sr, ip_hdr->ip_src);
         struct sr_if* iface = sr_get_interface(sr, matching_rt_entry->interface);
-        
-        uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, iface);
 
-        print_hdr_eth(icmp_packet);
-        print_hdr_ip(icmp_packet + sizeof(sr_ethernet_hdr_t));
-        print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+        /* Obtener la dirección IP del siguiente salto */
+        uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
+
+        /* Obtener la interfaz de salida */
+        struct sr_if* out_interface = sr_get_interface(sr, matching_rt_entry->interface);
+
+        /* Verificar la caché ARP */
+        struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), next_hop_ip);
+
+        uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, out_interface);
 
         sr_ip_hdr_t* ip_icmp_len = (sr_ip_hdr_t*) (icmp_packet + sizeof(sr_ethernet_hdr_t));
 
         unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_icmp_len->ip_len);
 
-        /* Enviar el paquete */
-        sr_send_packet(sr, icmp_packet, icmp_len, iface->name);
+        if (arp_entry != NULL && arp_entry->valid) {
+          /* Tenemos la dirección MAC, proceder a enviar el paquete */
+          printf("Entrada ARP encontrada, reenviando paquete\n");
 
-        free(icmp_packet);
+          /* Construir la cabecera Ethernet con las direcciones MAC adecuadas */
+          sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)icmp_packet;
+
+          /* Establecer la dirección de destino Ethernet a la dirección MAC de la caché ARP */
+          memcpy(eth_hdr->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
+
+          /* Establecer la dirección de origen Ethernet a la dirección MAC de la interfaz de salida */
+          memcpy(eth_hdr->ether_shost, out_interface->addr, ETHER_ADDR_LEN);
+
+          print_hdr_eth(icmp_packet);
+          print_hdr_ip(icmp_packet + sizeof(sr_ethernet_hdr_t));
+          print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+          /* Enviar el paquete */
+          sr_send_packet(sr, icmp_packet, icmp_len, iface->name);
+
+          free(icmp_packet);
+
+          free(arp_entry);
+
+        } else {
+          /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
+          printf("No se encontró entrada ARP, enviando solicitud ARP\n");
+          struct sr_arpreq* req = sr_arpcache_queuereq(&(sr->cache), next_hop_ip, icmp_packet, icmp_len, matching_rt_entry->interface);
+          handle_arpreq(sr, req);
+        } 
        
       } else { /*es cualquier otro paquete, enviar ICMP error*/ 
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
