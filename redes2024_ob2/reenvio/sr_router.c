@@ -118,11 +118,6 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
     handle_arpreq(sr, req);
   } 
 
-  printf("Enviando ICMP error:");
-  print_hdr_eth(icmp_packet);
-  print_hdr_ip(icmp_packet + sizeof(sr_ethernet_hdr_t));
-  print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-
 } /* -- sr_send_icmp_error_packet -- */
 
 void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del router */ 
@@ -154,7 +149,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
       if (ip_hdr->ip_ttl == 0) {
           /* TTL expirado, enviar mensaje ICMP Tiempo Excedido al remitente */
-          sr_send_icmp_error_packet(icmp_type_time_exceeded, 0, sr, src_ip, packet); /* Tipo 11, Código 0*/
+          sr_send_icmp_error_packet(icmp_type_time_exceeded, 0, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t)); /* Tipo 11, Código 0*/
           return;
       }
 
@@ -166,7 +161,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
       if (matching_rt_entry == NULL) {
           /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
-          sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, src_ip, packet); /*Tipo 3, Código 0*/ 
+          sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t)); /*Tipo 3, Código 0*/ 
           return;
       }
 
@@ -223,7 +218,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 
         if (matching_rt_entry == NULL) {
           /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
-          sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, src_ip, packet); /*Tipo 3, Código 0*/ 
+          sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t)); /*Tipo 3, Código 0*/ 
           return;
         } 
 
@@ -275,7 +270,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
        
       } else { /*es cualquier otro paquete, enviar ICMP error*/ 
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
-				sr_send_icmp_error_packet(icmp_type_dest_unreachable, icmp_code_port_unreachable, sr, src_ip, packet);
+				sr_send_icmp_error_packet(icmp_type_dest_unreachable, icmp_code_port_unreachable, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t));
       }
   } 
 

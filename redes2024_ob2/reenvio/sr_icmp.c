@@ -71,7 +71,7 @@ uint8_t *generate_icmp_packet_t3(uint8_t type,                  /* Nº de tipo d
     uint8_t* dest_MAC = eth_hdr->ether_shost;
 
     /* INTERNET PROTOCOL */
-    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet);
 
     uint32_t src_ip = interface->ip; /* la direccion origen ip es la ip de la interfaz por la que entró el packet */
     uint32_t dest_ip = ip_hdr->ip_src; /* la direccion destino es el ip origen del paquete*/
