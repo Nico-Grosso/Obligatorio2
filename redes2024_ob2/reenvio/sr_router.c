@@ -52,26 +52,7 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
-struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
-
-  struct sr_rt* best_match = NULL;
-  struct sr_rt* row_walker = sr->routing_table;
-
-  while (row_walker != NULL){
-    if((dest_ip & row_walker->mask.s_addr) == (row_walker->dest.s_addr & row_walker->mask.s_addr)){ /* si coincide el prefijo */
-      if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
-        best_match = row_walker;
-      }
-    }
-    row_walker = row_walker->next;
-  }
-  if (best_match){
-    printf("Best match LPM: %s\n", inet_ntoa(best_match->gw));
-  }
-  return best_match;
-} /* -- lpm -- */
-
-void handle_arp_lookup(struct sr_instance *sr, uint8_t *packet, unsigned int len, uint32_t next_hop_ip, char* interface) {
+void sr_handle_arp_lookup(struct sr_instance *sr, uint8_t *packet, unsigned int len, uint32_t next_hop_ip, char* interface) {
     /* Verificar la caché ARP */
     struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), next_hop_ip);
 
@@ -106,6 +87,75 @@ void handle_arp_lookup(struct sr_instance *sr, uint8_t *packet, unsigned int len
     }
 }
 
+struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
+
+  struct sr_rt* best_match = NULL;
+  struct sr_rt* row_walker = sr->routing_table;
+
+  while (row_walker != NULL){
+    if((dest_ip & row_walker->mask.s_addr) == (row_walker->dest.s_addr & row_walker->mask.s_addr)){ /* si coincide el prefijo */
+      if(best_match == NULL || row_walker->mask.s_addr > best_match->mask.s_addr){ /* si aun no se inicializo o encontre un prefijo mas grande*/
+        best_match = row_walker;
+      }
+    }
+    row_walker = row_walker->next;
+  }
+  if (best_match){
+    printf("Best match LPM: %s\n", inet_ntoa(best_match->gw));
+  }
+  return best_match;
+} /* -- lpm -- */
+
+void sr_forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len) {
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+    /* Decrementar TTL y verificar */
+    ip_hdr->ip_ttl--;
+    if (ip_hdr->ip_ttl == 0) {
+        /* TTL expirado, enviar mensaje ICMP Tiempo Excedido al remitente */
+        sr_send_icmp_error_packet(icmp_type_time_exceeded, 0, sr, ip_hdr->ip_src, packet + sizeof(sr_ethernet_hdr_t));
+        return;
+    }
+
+    /* Recalcular checksum del header modificado */
+    ip_hdr->ip_sum = 0;
+    ip_hdr->ip_sum = cksum(ip_hdr, ip_hdr->ip_hl * 4); /* Se multiplica HL por 4 para obtener bytes */
+
+    /* Buscar ruta en la tabla de enrutamiento */
+    struct sr_rt* matching_rt_entry = lpm(sr, ip_hdr->ip_dst);
+    if (matching_rt_entry == NULL) {
+        /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
+        sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, ip_hdr->ip_src, packet + sizeof(sr_ethernet_hdr_t));
+        return;
+    }
+
+    /* Obtener las direcciones IP y MAC del siguiente salto */
+    uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;
+    sr_handle_arp_lookup(sr, packet, len, next_hop_ip, matching_rt_entry->interface);
+}
+
+/* Envía un paquete ICMP Echo Reply */
+void sr_send_icmp_echo_request(struct sr_instance *sr, uint8_t *packet, struct sr_if *iface) {
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    struct sr_rt* matching_rt_entry = lpm(sr, ip_hdr->ip_src);
+
+    if (matching_rt_entry == NULL) {
+        /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
+        sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, ip_hdr->ip_src, packet + sizeof(sr_ethernet_hdr_t)); /*Tipo 3, Código 0*/ 
+        return;
+    }
+
+    /* Obtener la dirección IP del siguiente salto */
+    uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
+    uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, iface);
+    sr_ip_hdr_t* ip_icmp_len = (sr_ip_hdr_t*) (icmp_packet + sizeof(sr_ethernet_hdr_t));
+    unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_icmp_len->ip_len);
+
+    sr_handle_arp_lookup(sr, icmp_packet, icmp_len, next_hop_ip, matching_rt_entry->interface);
+    print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    free(icmp_packet);
+} /* -- sr_send_icmp_echo_request -- */
+
 /* Envía un paquete ICMP de error */
 void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */ 
                               uint8_t code,           /* Código dentro del tipo ICMP */
@@ -121,7 +171,7 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   unsigned int icmp_len_t3 = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
   uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ipDst;   
 
-  handle_arp_lookup(sr, icmp_packet, icmp_len_t3, next_hop_ip, matching_rt_entry->interface);
+  sr_handle_arp_lookup(sr, icmp_packet, icmp_len_t3, next_hop_ip, matching_rt_entry->interface);
   print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
   free(icmp_packet);
 } /* -- sr_send_icmp_error_packet -- */
@@ -132,13 +182,9 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
         uint8_t *srcAddr,                         /* Dirección MAC de origen del paquete */ 
         uint8_t *destAddr,                        /* Dirección MAC de destino del paquete */
         char *interface /* lent */,               /* Nombre de la interfaz de red (eth0, eth1) */
-        sr_ethernet_hdr_t *eHdr) {                /* Puntero al encabezado Ethernet del paquete */ 
-
+        sr_ethernet_hdr_t *eHdr)                  /* Puntero al encabezado Ethernet del paquete */ 
+{                
   sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /* cabecera IP */
-  uint8_t ip_header_length = ip_hdr->ip_hl * 4; /* tamanio de la cabecera IP en bytes */
-  uint32_t src_ip = ip_hdr->ip_src; /* direccion origen IP */  
-  uint32_t dest_ip = ip_hdr->ip_dst; /* direccion destino IP */
-  uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, etc) */  
 
   printf("RECIBIDO\n");
   print_hdr_eth(packet);
@@ -148,70 +194,23 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
   struct sr_if* iface = sr_get_interface_given_ip(sr, ip_hdr->ip_dst); /* devuelve 0 si el router no es destino */ 
 
   if (iface == NULL) {
-      /* El paquete no está destinado al router, proceder con el reenvío */
-
-      /* Decrementar TTL */
-      ip_hdr->ip_ttl--;
-
-      if (ip_hdr->ip_ttl == 0) {
-          /* TTL expirado, enviar mensaje ICMP Tiempo Excedido al remitente */
-          sr_send_icmp_error_packet(icmp_type_time_exceeded, 0, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t)); /* Tipo 11, Código 0*/
-          return;
-      }
-
-      /* Recalcular checksum del header modificado */
-      ip_hdr->ip_sum = 0;
-      ip_hdr->ip_sum = cksum(ip_hdr, ip_header_length);
-
-      struct sr_rt* matching_rt_entry = lpm(sr, dest_ip);
-
-      if (matching_rt_entry == NULL) {
-          /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
-          sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t)); /*Tipo 3, Código 0*/ 
-          return;
-      }
-
-      /* Obtener la dirección IP del siguiente salto */
-      /*TODO: revisar esto*/ 
-      uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
-
-      handle_arp_lookup(sr, packet, len, next_hop_ip, matching_rt_entry->interface);
+      /* El paquete no está destinado al router, proceder con el reenvío */      
+      sr_forward_ip_packet(sr, packet, len);
   } else {
       /* El paquete está destinado al propio router */
-      /* Manejar solicitudes ICMP echo */
-      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)((uint8_t *)ip_hdr + (ip_hdr->ip_hl * 4)); /*accedo al header del ICMP*/ 
+      uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, etc) */  
+      sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)((uint8_t *)ip_hdr + (ip_hdr->ip_hl * 4)); /* accedo al header del ICMP */ 
 
-      if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request){ /* verificamos si el paquete es ECHO REQUEST */
-
+      if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request) { /* verificamos si el paquete es ECHO REQUEST */  
         printf("Print de hdr_icmp del paquete de entrada\n");
         print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
 
-        struct sr_rt* matching_rt_entry = lpm(sr, ip_hdr->ip_src);
-
-        if (matching_rt_entry == NULL) {
-          /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
-          sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t)); /*Tipo 3, Código 0*/ 
-          return;
-        } 
-
-        /* Obtener la dirección IP del siguiente salto */
-        uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;   
-
-        uint8_t* icmp_packet = generate_icmp_packet(icmp_echo_reply, 0, packet, sr, iface);
-
-        sr_ip_hdr_t* ip_icmp_len = (sr_ip_hdr_t*) (icmp_packet + sizeof(sr_ethernet_hdr_t));
-
-        unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_icmp_len->ip_len);
-
-        handle_arp_lookup(sr, icmp_packet, icmp_len, next_hop_ip, matching_rt_entry->interface);
-        print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-        free(icmp_packet);
-       
-      } else { /*es cualquier otro paquete, enviar ICMP error*/ 
+        sr_send_icmp_echo_request(sr, packet, iface);       
+      } else { /*es cualquier otro paquete, enviar ICMP error*/         
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
-				sr_send_icmp_error_packet(icmp_type_dest_unreachable, icmp_code_port_unreachable, sr, src_ip, packet + sizeof(sr_ethernet_hdr_t));
+
+				sr_send_icmp_error_packet(icmp_type_dest_unreachable, icmp_code_port_unreachable, sr, ip_hdr->ip_src, packet + sizeof(sr_ethernet_hdr_t));
       }
   } 
 
