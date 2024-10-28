@@ -24,6 +24,8 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 #include "sr_icmp.h"
+#include "sr_arp.h"
+#include "sr_ip.h"
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -52,41 +54,6 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
-void sr_handle_arp_lookup(struct sr_instance *sr, uint8_t *packet, unsigned int len, uint32_t next_hop_ip, char* interface) {
-    /* Verificar la caché ARP */
-    struct sr_arpentry *arp_entry = sr_arpcache_lookup(&(sr->cache), next_hop_ip);
-
-    if (arp_entry != NULL && arp_entry->valid) {
-        /* Tenemos la dirección MAC, proceder a enviar el paquete */
-        printf("Entrada ARP encontrada, reenviando paquete\n");
-
-        /* Construir la cabecera Ethernet con las direcciones MAC adecuadas */
-        sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)packet;
-        
-        /* Obtener la interfaz de salida */
-        struct sr_if* out_interface = sr_get_interface(sr, interface);
-
-        /* Establecer la dirección de destino Ethernet a la dirección MAC de la caché ARP */
-        memcpy(eth_hdr->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
-
-        /* Establecer la dirección de origen Ethernet a la dirección MAC de la interfaz de salida */
-        memcpy(eth_hdr->ether_shost, out_interface->addr, ETHER_ADDR_LEN);
-
-        print_hdr_eth(packet);
-        print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
-
-        /* Enviar el paquete */
-        sr_send_packet(sr, packet, len, out_interface->name);
-
-        free(arp_entry);
-    } else {
-        /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
-        printf("No se encontró entrada ARP, enviando solicitud ARP\n");
-        struct sr_arpreq* req = sr_arpcache_queuereq(&(sr->cache), next_hop_ip, packet, len, interface);
-        handle_arpreq(sr, req);
-    }
-}
-
 struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
 
   struct sr_rt* best_match = NULL;
@@ -105,34 +72,6 @@ struct sr_rt* lpm(struct sr_instance *sr, uint32_t dest_ip){
   }
   return best_match;
 } /* -- lpm -- */
-
-void sr_forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len) {
-    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-
-    /* Decrementar TTL y verificar */
-    ip_hdr->ip_ttl--;
-    if (ip_hdr->ip_ttl == 0) {
-        /* TTL expirado, enviar mensaje ICMP Tiempo Excedido al remitente */
-        sr_send_icmp_error_packet(icmp_type_time_exceeded, 0, sr, ip_hdr->ip_src, packet + sizeof(sr_ethernet_hdr_t));
-        return;
-    }
-
-    /* Recalcular checksum del header modificado */
-    ip_hdr->ip_sum = 0;
-    ip_hdr->ip_sum = cksum(ip_hdr, ip_hdr->ip_hl * 4); /* Se multiplica HL por 4 para obtener bytes */
-
-    /* Buscar ruta en la tabla de enrutamiento */
-    struct sr_rt* matching_rt_entry = lpm(sr, ip_hdr->ip_dst);
-    if (matching_rt_entry == NULL) {
-        /* No hay entrada coincidente, enviar mensaje ICMP Destino Red Inalcanzable al remitente */
-        sr_send_icmp_error_packet(icmp_type_dest_unreachable, 0, sr, ip_hdr->ip_src, packet + sizeof(sr_ethernet_hdr_t));
-        return;
-    }
-
-    /* Obtener las direcciones IP y MAC del siguiente salto */
-    uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ip_hdr->ip_dst;
-    sr_handle_arp_lookup(sr, packet, len, next_hop_ip, matching_rt_entry->interface);
-}
 
 /* Envía un paquete ICMP Echo Reply */
 void sr_send_icmp_echo_request(struct sr_instance *sr, uint8_t *packet, struct sr_if *iface) {
@@ -214,22 +153,9 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
       }
   } 
 
-  /* 
-  * COLOQUE ASÍ SU CÓDIGO
-  * SUGERENCIAS: 
-  * - Obtener el cabezal IP y direcciones 
-  * - Verificar si el paquete es para una de mis interfaces o si hay una coincidencia en mi tabla de enrutamiento 
-  * - Si no es para una de mis interfaces y no hay coincidencia en la tabla de enrutamiento, enviar ICMP net unreachable
-  * - Sino, si es para mí, verificar si es un paquete ICMP echo request y responder con un echo reply 
-  * - Sino, verificar TTL, ARP y reenviar si corresponde (puede necesitar una solicitud ARP y esperar la respuesta)
-  * - No olvide imprimir los mensajes de depuración
-  */
-
 }
 
-/* 
-* ***** A partir de aquí no debería tener que modificar nada ****
-*/
+/****** A partir de aquí no debería tener que modificar nada *****/
 
 /* Envía todos los paquetes IP pendientes de una solicitud ARP */
 void sr_arp_reply_send_pending_packets(struct sr_instance *sr,
