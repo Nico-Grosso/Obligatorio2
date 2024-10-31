@@ -206,6 +206,12 @@ void* check_neighbors_life(void* arg)
     /* 
     Cada 1 segundo, chequea la lista de vecinos.
     */
+
+    while (1){
+
+        usleep(1000000);
+        check_neighbors_alive(g_neighbors);
+    }
     return NULL;
 } /* -- check_neighbors_life -- */
 
@@ -221,6 +227,26 @@ void* check_neighbors_life(void* arg)
 void* check_topology_entries_age(void* arg)
 {
     struct sr_instance* sr = (struct sr_instance*)arg;
+
+    while (1) {
+        usleep(1000000);
+
+        uint8_t deleted = check_topology_age(g_topology);
+
+        if (deleted){ /* hubo cambios en la topologia, se elimino al menos un router */
+
+            Debug("Imprimiendo topology table:\n");
+            print_topolgy_table(g_topology);
+            Debug("\n");      
+
+            dijkstra_param_t* dij = malloc(sizeof(dijkstra_param_t));
+            dij->sr = sr;
+            dij->topology = g_topology;
+            /*dij->rid = sr->topo_id;*/
+            
+            pthread_create(&g_dijkstra_thread, NULL, run_dijkstra, dij);
+        }
+    }
 
     /* 
     Cada 1 segundo, chequea el tiempo de vida de cada entrada
@@ -400,14 +426,19 @@ void* send_lsu(void* arg)
 
 void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsigned int length, struct sr_if* rx_if)
 {
+
     /* Obtengo información del paquete recibido */
+    uint32_t neighbor_id = rx_if->neighbor_id;
+    uint32_t neighbor_ip = rx_if->neighbor_ip;
+    uint32_t net_mask = rx_if->mask;
+    
     /* Imprimo info del paquete recibido*/
-    /*
+  
     Debug("-> PWOSPF: Detecting PWOSPF HELLO Packet from:\n");
     Debug("      [Neighbor ID = %s]\n", inet_ntoa(neighbor_id));
     Debug("      [Neighbor IP = %s]\n", inet_ntoa(neighbor_ip));
     Debug("      [Network Mask = %s]\n", inet_ntoa(net_mask));
-    */
+
 
     /* Chequeo checksum */
         /*Debug("-> PWOSPF: HELLO Packet dropped, invalid checksum\n");*/

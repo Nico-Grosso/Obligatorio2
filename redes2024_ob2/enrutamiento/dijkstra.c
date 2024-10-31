@@ -25,7 +25,7 @@ void* run_dijkstra(void* arg)
     struct in_addr zero;
     zero.s_addr = 0;
     struct dijkstra_item* dijkstra_stack = create_dikjstra_item(create_ospfv2_topology_entry(zero, zero, zero, zero, zero, 0), 0);
-   struct dijkstra_item*  dijkstra_heap = create_dikjstra_item(create_ospfv2_topology_entry(zero, zero, zero, zero, zero, 0), 0);
+    struct dijkstra_item*  dijkstra_heap = create_dikjstra_item(create_ospfv2_topology_entry(zero, zero, zero, zero, zero, 0), 0);
 
     /* Limpio la tabla*/
     clear_routes(dij_param->sr);
