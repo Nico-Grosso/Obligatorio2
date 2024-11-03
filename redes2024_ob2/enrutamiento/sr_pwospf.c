@@ -208,7 +208,6 @@ void* check_neighbors_life(void* arg)
     */
 
     while (1){
-
         usleep(1000000);
         check_neighbors_alive(g_neighbors);
     }
@@ -428,10 +427,15 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
 {
 
     /* Obtengo información del paquete recibido */
-    uint32_t neighbor_id = rx_if->neighbor_id;
-    uint32_t neighbor_ip = rx_if->neighbor_ip;
-    uint32_t net_mask = rx_if->mask;
-    
+    struct in_addr neighbor_id;
+    neighbor_id.s_addr = rx_if->neighbor_id;
+
+    struct in_addr neighbor_ip;
+    neighbor_ip.s_addr = rx_if->neighbor_ip;
+
+    struct in_addr net_mask;
+    net_mask.s_addr = rx_if->mask;  
+
     /* Imprimo info del paquete recibido*/
   
     Debug("-> PWOSPF: Detecting PWOSPF HELLO Packet from:\n");
