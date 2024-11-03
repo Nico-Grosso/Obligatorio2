@@ -427,15 +427,20 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
 {
 
     /* Obtengo información del paquete recibido */
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
+    ospfv2_hdr_t* ospfv2_hdr = ((ospfv2_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)));
+    ospfv2_hello_hdr_t* ospfv2_hello_hdr =(ospfv2_hello_hdr_t*) (ospfv2_hdr + sizeof(ospfv2_hdr_t));
+
     struct in_addr neighbor_id;
-    neighbor_id.s_addr = rx_if->neighbor_id;
+    neighbor_id.s_addr = ospfv2_hdr->rid;
 
     struct in_addr neighbor_ip;
-    neighbor_ip.s_addr = rx_if->neighbor_ip;
+    neighbor_ip.s_addr = ip_hdr->ip_src;
 
     struct in_addr net_mask;
-    net_mask.s_addr = rx_if->mask;  
+    net_mask.s_addr = ospfv2_hello_hdr->nmask;  
 
+ 
     /* Imprimo info del paquete recibido*/
   
     Debug("-> PWOSPF: Detecting PWOSPF HELLO Packet from:\n");
@@ -443,21 +448,56 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
     Debug("      [Neighbor IP = %s]\n", inet_ntoa(neighbor_ip));
     Debug("      [Network Mask = %s]\n", inet_ntoa(net_mask));
 
-
     /* Chequeo checksum */
-        /*Debug("-> PWOSPF: HELLO Packet dropped, invalid checksum\n");*/
+
+    uint16_t sum = ospfv2_hdr->csum;
+    ospfv2_hdr->csum = 0;
+    uint16_t calcular_chk = ospfv2_cksum(ospfv2_hdr, sizeof(ospfv2_hdr_t) + sizeof(ospfv2_hello_hdr_t));
+    if (sum != calcular_chk){
+        Debug("-> PWOSPF: HELLO Packet dropped, invalid checksum\n");
+        return;
+    }
+    ospfv2_hdr->csum = calcular_chk;
 
     /* Chequeo de la máscara de red */
-        /*Debug("-> PWOSPF: HELLO Packet dropped, invalid hello network mask\n");*/
+    uint32_t mask = ospfv2_hello_hdr->nmask;
+    if (mask != net_mask.s_addr){
+        Debug("-> PWOSPF: HELLO Packet dropped, invalid hello network mask\n");
+        return;
+    }
 
     /* Chequeo del intervalo de HELLO */
-        /*Debug("-> PWOSPF: HELLO Packet dropped, invalid hello interval\n");*/
+    if (ospfv2_hello_hdr->helloint != OSPF_DEFAULT_HELLOINT){
+        Debug("-> PWOSPF: HELLO Packet dropped, invalid hello interval\n");
+        return;
+    }
 
     /* Seteo el vecino en la interfaz por donde llegó y actualizo la lista de vecinos */
+    int esNuevo = 0;
+    if (rx_if->neighbor_id != ospfv2_hdr->rid){ /* si el neighbor_id = 0 es porque no estaba guaradado ese vecino*/
+        esNuevo = 1;
+        rx_if->neighbor_id = ospfv2_hdr->rid;
+        rx_if->neighbor_ip = neighbor_ip.s_addr;
+    }
+
+    refresh_neighbors_alive(g_neighbors, neighbor_id);
+
 
     /* Si es un nuevo vecino, debo enviar LSUs por todas mis interfaces*/
         /* Recorro todas las interfaces para enviar el paquete LSU */
         /* Si la interfaz tiene un vecino, envío un LSU */
+    if (esNuevo){
+        struct sr_if* interface = sr->if_list;
+        while (interface != NULL){
+            if (interface->neighbor_id != 0 && interface->neighbor_id != 0xffffffff){
+                powspf_hello_lsu_param_t* lsu_param = (powspf_hello_lsu_param_t*)(malloc(sizeof(powspf_hello_lsu_param_t)));
+                lsu_param->interface = interface;
+                lsu_param->sr = sr;
+                pthread_create(&g_lsu_thread, NULL, send_lsu, lsu_param);
+            }
+            interface = interface->next;
+        }
+    }
 
 } /* -- sr_handle_pwospf_hello_packet -- */
 
