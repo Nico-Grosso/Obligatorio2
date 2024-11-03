@@ -410,24 +410,42 @@ void* send_all_lsu(void* arg)
 {
     struct sr_instance* sr = (struct sr_instance*)arg;
 
-    /* while true*/
-    while(1)
-    {
+    while (1) {
         /* Se ejecuta cada OSPF_DEFAULT_LSUINT segundos */
         usleep(OSPF_DEFAULT_LSUINT * 1000000);
 
         /* Bloqueo para evitar mezclar el envío de HELLOs y LSUs */
         pwospf_lock(sr->ospf_subsys);
-        
+
         /* Recorro todas las interfaces para enviar el paquete LSU */
-            /* Si la interfaz tiene un vecino, envío un LSU */
+        struct sr_if* iface = sr->if_list;
+        while (iface) {
+            /* Recorro la lista de vecinos para ver si hay un vecino activo en esta interfaz */
+            struct ospfv2_neighbor* neighbor = g_neighbors;
+            while (neighbor) {
+                /* Enviar LSU si hay un vecino activo */
+                if (neighbor->alive) {
+                    powspf_hello_lsu_param_t* lsu_param = malloc(sizeof(powspf_hello_lsu_param_t));
+                    lsu_param->sr = sr;
+                    lsu_param->interface = iface;
+
+                    /* Crear un hilo para enviar el LSU en esta interfaz */
+                    pthread_t lsu_thread;
+                    pthread_create(&lsu_thread, NULL, send_lsu, lsu_param); // Enviar lsu de forma asincrona
+                    pthread_detach(lsu_thread); // Detach para evitar fugas de memoria
+                    break; // Salir del bucle de vecinos, ya que se encontró uno activo
+                }                
+                neighbor = neighbor->next;
+            }
+            iface = iface->next;
+        }
 
         /* Desbloqueo */
         pwospf_unlock(sr->ospf_subsys);
-    };
-
+    }
     return NULL;
-} /* -- send_all_lsu -- */
+}
+ /* -- send_all_lsu -- */
 
 /*---------------------------------------------------------------------
  * Method: send_lsu
