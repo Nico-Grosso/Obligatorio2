@@ -126,9 +126,38 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   free(icmp_packet);
 } /* -- sr_send_icmp_error_packet -- */
 
+void sr_handle_pwospf_packet(struct sr_instance *sr,  
+                             uint8_t *packet, 
+                             unsigned int len, 
+                             uint8_t *destAddr, 
+                             struct sr_if *iface) 
+{    
+  sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+  /* Aceptar solo si la dirección IP de destino es OSPF_AllSPFRouters y la MAC coincide */
+  if (ip_hdr->ip_dst == htonl(OSPF_AllSPFRouters) && 
+    memcmp(destAddr, sr_multicast_mac, ETHER_ADDR_LEN) == 0) {
+
+    /* Determinar el tipo de mensaje PWOSPF (HELLO o LSU) */
+    ospfv2_hdr_t *ospf_hdr = (ospfv2_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + + sizeof(sr_ip_hdr_t));
+
+    if (ospf_hdr->type == OSPF_TYPE_HELLO) {
+        printf("Recibido mensaje PWOSPF HELLO\n");
+        sr_handle_pwospf_hello_packet(sr, packet, len, iface);
+    } else if (ospf_hdr->type == OSPF_TYPE_LSU) {
+        printf("Recibido mensaje PWOSPF LSU\n");
+        sr_handle_pwospf_lsu_packet(sr, packet, len, iface);
+    } else {
+      printf("Tipo de paquete PWOSPF desconocido: %d\n", ospf_hdr->type);
+    }
+  } else {
+      printf("Descartando paquete PWOSPF: dirección MAC o IP no coincide\n");
+  }
+}
+
 void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del router */ 
         uint8_t *packet /* lent */,               /* Puntero al paquete recibido (paquete IP) */ 
-        unsigned int len,                         /* Longitut total del paquete (en bytes) */ 
+        unsigned int len,                         /* Longitud total del paquete (en bytes) */ 
         uint8_t *srcAddr,                         /* Dirección MAC de origen del paquete */ 
         uint8_t *destAddr,                        /* Dirección MAC de destino del paquete */
         char *interface /* lent */,               /* Nombre de la interfaz de red (eth0, eth1) */
@@ -140,15 +169,23 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
   print_hdr_eth(packet);
   print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
 
-  /* Verificar si el paquete está destinado a una de las interfaces del router */
-  struct sr_if* iface = sr_get_interface_given_ip(sr, ip_hdr->ip_dst); /* devuelve 0 si el router no es destino */ 
+  /* Verificar si el paquete es PWOSPF */
+  uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, OSPF, etc) */  
+  if (protocol == ip_protocol_ospfv2) {
+    /* Llamar al manejador de paquetes PWOSPF */
+    struct sr_if* recv_iface = sr_get_interface(sr, interface);
+    sr_handle_pwospf_packet(sr, packet, len, destAddr, recv_iface);
+    return;  /* Termina aquí si es un paquete PWOSPF */
+  }
 
-  if (iface == NULL) {
+  /* Verificar si el paquete está destinado a una de las interfaces del router */
+  struct sr_if* dest_iface = sr_get_interface_given_ip(sr, ip_hdr->ip_dst);
+
+  if (dest_iface == NULL) {
       /* El paquete no está destinado al router, proceder con el reenvío */      
       sr_forward_ip_packet(sr, packet, len);
   } else {
       /* El paquete está destinado al propio router */
-      uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, etc) */  
       sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)((uint8_t *)ip_hdr + (ip_hdr->ip_hl * 4)); /* accedo al header del ICMP */ 
 
       if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request) { /* verificamos si el paquete es ECHO REQUEST */  
@@ -156,7 +193,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
         print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
 
-        sr_send_icmp_echo_request(sr, packet, iface);       
+        sr_send_icmp_echo_request(sr, packet, dest_iface);       
       } else { /*es cualquier otro paquete, enviar ICMP error*/         
         printf("El paquete es para mí pero no es ICMP, enviando ICMP puerto inalcanzable\n");
 
