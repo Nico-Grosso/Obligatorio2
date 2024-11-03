@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "sr_icmp.h": "c"
+        "sr_icmp.h": "c",
+        "sr_ip.h": "c",
+        "sr_router.h": "c",
+        "sr_arp.h": "c"
     }
 }
