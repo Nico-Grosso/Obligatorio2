@@ -44,6 +44,8 @@ struct ospfv2_neighbor* g_neighbors;
 struct pwospf_topology_entry* g_topology;
 uint16_t g_sequence_num;
 
+static uint16_t ip_id_counter = 0;
+
 /* -- Declaración de hilo principal de la función del subsistema pwospf --- */
 static void* pwospf_run_thread(void* arg);
 
@@ -303,43 +305,99 @@ void* send_hellos(void* arg)
 void* send_hello_packet(void* arg)
 {
     powspf_hello_lsu_param_t* hello_param = ((powspf_hello_lsu_param_t*)(arg));
+    struct sr_if* iface = hello_param->interface;
 
-    Debug("\n\nPWOSPF: Constructing HELLO packet for interface %s: \n", hello_param->interface->name);
+    Debug("\n\nPWOSPF: Constructing HELLO packet for interface %s\n", iface->name);
+
+    /* Tamaño del paquete HELLO */
+    unsigned int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(ospfv2_hdr_t) + sizeof(ospfv2_hello_hdr_t);
+    uint8_t* packet = malloc(packet_len);
+
+    /* Encabezado Ethernet */
+    sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*) packet;
     
     /* Seteo la dirección MAC de multicast para la trama a enviar */
-    /* Seteo la dirección MAC origen con la dirección de mi interfaz de salida */
-    /* Seteo el ether_type en el cabezal Ethernet */
-
-    /* Inicializo cabezal IP */
-    /* Seteo el protocolo en el cabezal IP para ser el de OSPF (89) */
-    /* Seteo IP origen con la IP de mi interfaz de salida */
-    /* Seteo IP destino con la IP de Multicast dada: OSPF_AllSPFRouters  */
-    /* Calculo y seteo el chechsum IP*/
+    memcpy(eth_hdr->ether_dhost, g_ospf_multicast_mac, ETHER_ADDR_LEN);
     
+    /* Seteo la dirección MAC origen con la dirección de mi interfaz de salida */
+    memcpy(eth_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+    
+    /* Seteo el ether_type en el cabezal Ethernet */
+    eth_hdr->ether_type = htons(ethertype_ip);                           
+
+    /* Encabezado IP */
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
+    
+    /* Inicializo cabezal IP */
+    ip_hdr->ip_v = 4;                                   
+    ip_hdr->ip_hl = sizeof(sr_ip_hdr_t) / 4;            
+    ip_hdr->ip_tos = 0;                                 
+    ip_hdr->ip_len = htons(packet_len - sizeof(sr_ethernet_hdr_t));
+    ip_hdr->ip_id = htons(ip_id_counter++);                           
+    ip_hdr->ip_off = 0;                                 
+    ip_hdr->ip_ttl = 16;                                
+    
+    /* Seteo IP origen con la IP de mi interfaz de salida */
+    ip_hdr->ip_src = iface->ip;                         
+    
+    /* Seteo IP destino con la IP de Multicast dada: OSPF_AllSPFRouters  */
+    ip_hdr->ip_dst = htonl(OSPF_AllSPFRouters);         
+
+    /* Seteo el protocolo en el cabezal IP para ser el de OSPF (89) */
+    ip_hdr->ip_p = ip_protocol_ospfv2;      
+
+    /* Calculo y seteo el chechsum IP*/            
+    ip_hdr->ip_sum = 0;
+    ip_hdr->ip_sum = cksum(ip_hdr, ip_hdr->ip_hl * 4); 
+
+    /* Encabezado PWOSPF */
+    ospfv2_hdr_t* ospf_hdr = (ospfv2_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
     /* Inicializo cabezal de PWOSPF con version 2 y tipo HELLO */
+    ospf_hdr->version = OSPF_V2;
+    ospf_hdr->type = OSPF_TYPE_HELLO;                   
+    ospf_hdr->len = htons(sizeof(ospfv2_hdr_t) + sizeof(ospfv2_hello_hdr_t));
     
     /* Seteo el Router ID con mi ID*/
+    ospf_hdr->rid = g_router_id.s_addr;                 
+     
     /* Seteo el Area ID en 0 */
+    ospf_hdr->aid = 0;                           
+    
     /* Seteo el Authentication Type y Authentication Data en 0*/
-    /* Seteo máscara con la máscara de mi interfaz de salida */
-    /* Seteo Hello Interval con OSPF_DEFAULT_HELLOINT */
-    /* Seteo Padding en 0*/
+    ospf_hdr->autype = 0;
+    ospf_hdr->audata = 0;
 
-    /* Creo el paquete a transmitir */
-   
+    /* Encabezado HELLO */
+    ospfv2_hello_hdr_t* hello_hdr = (ospfv2_hello_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(ospfv2_hdr_t));
+    
+    /* Seteo máscara con la máscara de mi interfaz de salida */
+    hello_hdr->nmask = iface->mask;
+    
+    /* Seteo Hello Interval con OSPF_DEFAULT_HELLOINT */
+    hello_hdr->helloint = htons(OSPF_DEFAULT_HELLOINT);
+    
+    /* Seteo Padding en 0*/
+    hello_hdr->padding = 0;
+
     /* Calculo y actualizo el checksum del cabezal OSPF */
+    ospf_hdr->csum = 0;
+    ospf_hdr->csum = cksum(ospf_hdr, sizeof(ospfv2_hdr_t) + sizeof(ospfv2_hello_hdr_t));
 
     /* Envío el paquete HELLO */
+    sr_send_packet(hello_param->sr, packet, packet_len, iface->name);
+    
     /* Imprimo información del paquete HELLO enviado */
-    /*
     Debug("-> PWOSPF: Sending HELLO Packet of length = %d, out of the interface: %s\n", packet_len, hello_param->interface->name);
     Debug("      [Router ID = %s]\n", inet_ntoa(g_router_id));
     Debug("      [Router IP = %s]\n", inet_ntoa(ip));
     Debug("      [Network Mask = %s]\n", inet_ntoa(mask));
-    */
 
+    Debug("-> PWOSPF: HELLO Packet sent on interface: %s\n", iface->name);
+    free(packet);
     return NULL;
-} /* -- send_hello_packet -- */
+}
+ /* -- send_hello_packet -- */
 
 /*---------------------------------------------------------------------
  * Method: send_all_lsu
