@@ -429,7 +429,7 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
     /* Obtengo información del paquete recibido */
     sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
     ospfv2_hdr_t* ospfv2_hdr = ((ospfv2_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)));
-    ospfv2_hello_hdr_t* ospfv2_hello_hdr =(ospfv2_hello_hdr_t*) (ospfv2_hdr + sizeof(ospfv2_hdr_t));
+    ospfv2_hello_hdr_t* ospfv2_hello_hdr =(ospfv2_hello_hdr_t*) ((uint8_t*)ospfv2_hdr + sizeof(ospfv2_hdr_t));
 
     struct in_addr neighbor_id;
     neighbor_id.s_addr = ospfv2_hdr->rid;
@@ -460,8 +460,7 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
     ospfv2_hdr->csum = calcular_chk;
 
     /* Chequeo de la máscara de red */
-    uint32_t mask = ospfv2_hello_hdr->nmask;
-    if (mask != net_mask.s_addr){
+    if (rx_if->mask != net_mask.s_addr){
         Debug("-> PWOSPF: HELLO Packet dropped, invalid hello network mask\n");
         return;
     }
@@ -473,23 +472,22 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
     }
 
     /* Seteo el vecino en la interfaz por donde llegó y actualizo la lista de vecinos */
-    int esNuevo = 0;
+    int es_nuevo = 0;
     if (rx_if->neighbor_id != ospfv2_hdr->rid){ /* si el neighbor_id = 0 es porque no estaba guaradado ese vecino*/
-        esNuevo = 1;
+        es_nuevo = 1;
         rx_if->neighbor_id = ospfv2_hdr->rid;
         rx_if->neighbor_ip = neighbor_ip.s_addr;
     }
 
     refresh_neighbors_alive(g_neighbors, neighbor_id);
 
-
     /* Si es un nuevo vecino, debo enviar LSUs por todas mis interfaces*/
         /* Recorro todas las interfaces para enviar el paquete LSU */
         /* Si la interfaz tiene un vecino, envío un LSU */
-    if (esNuevo){
+    if (es_nuevo){
         struct sr_if* interface = sr->if_list;
         while (interface != NULL){
-            if (interface->neighbor_id != 0 && interface->neighbor_id != 0xffffffff){
+            if (interface->neighbor_id != NEIGHBOR_ID_UNITIALIZED && interface->neighbor_id !=  NEIGHBOR_ID_BROADCAST){ /*-- Si tiene estas ID es porque no es un vecino inicializado-- */
                 powspf_hello_lsu_param_t* lsu_param = (powspf_hello_lsu_param_t*)(malloc(sizeof(powspf_hello_lsu_param_t)));
                 lsu_param->interface = interface;
                 lsu_param->sr = sr;

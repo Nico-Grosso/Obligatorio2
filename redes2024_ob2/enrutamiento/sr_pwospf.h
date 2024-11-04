@@ -14,6 +14,9 @@
 #include <pthread.h>
 #include "sr_protocol.h"
 
+#define NEIGHBOR_ID_UNITIALIZED 0
+#define NEIGHBOR_ID_BROADCAST 0xffffffff
+
 
 /* forward declare */
 struct sr_instance;
