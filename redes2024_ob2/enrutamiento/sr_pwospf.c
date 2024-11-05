@@ -390,9 +390,10 @@ void* send_hello_packet(void* arg)
     /* Imprimo información del paquete HELLO enviado */
     Debug("-> PWOSPF: Sending HELLO Packet of length = %d, out of the interface: %s\n", packet_len, hello_param->interface->name);
     Debug("      [Router ID = %s]\n", inet_ntoa(g_router_id));
+    /* TODO: ip y mask
     Debug("      [Router IP = %s]\n", inet_ntoa(ip));
     Debug("      [Network Mask = %s]\n", inet_ntoa(mask));
-
+    */
     Debug("-> PWOSPF: HELLO Packet sent on interface: %s\n", iface->name);
     free(packet);
     return NULL;
@@ -431,9 +432,9 @@ void* send_all_lsu(void* arg)
 
                     /* Crear un hilo para enviar el LSU en esta interfaz */
                     pthread_t lsu_thread;
-                    pthread_create(&lsu_thread, NULL, send_lsu, lsu_param); // Enviar lsu de forma asincrona
-                    pthread_detach(lsu_thread); // Detach para evitar fugas de memoria
-                    break; // Salir del bucle de vecinos, ya que se encontró uno activo
+                    pthread_create(&lsu_thread, NULL, send_lsu, lsu_param); /* Enviar lsu de forma asincrona */
+                    pthread_detach(lsu_thread); /* Detach para evitar fugas de memoria */
+                    break; /*Salir del bucle de vecinos, ya que se encontró uno activo */
                 }                
                 neighbor = neighbor->next;
             }

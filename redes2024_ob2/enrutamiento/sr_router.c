@@ -126,7 +126,7 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   free(icmp_packet);
 } /* -- sr_send_icmp_error_packet -- */
 
-void sr_handle_pwospf_packet(struct sr_instance *sr,  
+void sr_process_pwospf_packet(struct sr_instance *sr,  
                              uint8_t *packet, 
                              unsigned int len, 
                              uint8_t *destAddr, 
@@ -146,7 +146,17 @@ void sr_handle_pwospf_packet(struct sr_instance *sr,
         sr_handle_pwospf_hello_packet(sr, packet, len, iface);
     } else if (ospf_hdr->type == OSPF_TYPE_LSU) {
         printf("Recibido mensaje PWOSPF LSU\n");
-        sr_handle_pwospf_lsu_packet(sr, packet, len, iface);
+
+        powspf_rx_lsu_param_t* rx_lsu_param = malloc(sizeof(powspf_rx_lsu_param_t));
+        rx_lsu_param->sr = sr;
+        rx_lsu_param->length = len;
+        rx_lsu_param->rx_if = iface;
+        memcpy(rx_lsu_param->packet, packet, len);
+
+        /* TODO: hace falta crear thread acá? */
+        pthread_t lsu_thread;
+        pthread_create(&lsu_thread, NULL, sr_handle_pwospf_lsu_packet, rx_lsu_param);
+        pthread_detach(lsu_thread);
     } else {
       printf("Tipo de paquete PWOSPF desconocido: %d\n", ospf_hdr->type);
     }
@@ -174,7 +184,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
   if (protocol == ip_protocol_ospfv2) {
     /* Llamar al manejador de paquetes PWOSPF */
     struct sr_if* recv_iface = sr_get_interface(sr, interface);
-    sr_handle_pwospf_packet(sr, packet, len, destAddr, recv_iface);
+    sr_process_pwospf_packet(sr, packet, len, destAddr, recv_iface);
     return;  /* Termina aquí si es un paquete PWOSPF */
   }
 
