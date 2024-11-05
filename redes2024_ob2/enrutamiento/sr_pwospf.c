@@ -47,6 +47,8 @@ uint16_t g_sequence_num;
 /* -- Declaración de hilo principal de la función del subsistema pwospf --- */
 static void* pwospf_run_thread(void* arg);
 
+static uint16_t ip_id_counter = 0;
+
 /*---------------------------------------------------------------------
  * Method: pwospf_init(..)
  *
@@ -383,19 +385,49 @@ void* send_lsu(void* arg)
     powspf_hello_lsu_param_t* lsu_param = ((powspf_hello_lsu_param_t*)(arg));
 
     /* Solo envío LSUs si del otro lado hay un router*/
-    
+    /*--  Esto lo chequeo antes de llamar a la funcion pero igual --*/
+    if (lsu_param->interface->neighbor_id == NEIGHBOR_ID_UNITIALIZED){
+        return NULL;    
+    }
+
     /* Construyo el LSU */
     Debug("\n\nPWOSPF: Constructing LSU packet\n");
+    int cantidad_rutas = count_routes(lsu_param->sr);
+    uint8_t* lsu_packet = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(ospfv2_hdr_t) + sizeof(ospfv2_lsu_hdr_t) + sizeof(ospfv2_lsa_t)*cantidad_rutas);
+    int packet_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(ospfv2_hdr_t) + sizeof(ospfv2_lsu_hdr_t) + sizeof(ospfv2_lsa_t)*cantidad_rutas;
 
     /* Inicializo cabezal Ethernet */
     /* Dirección MAC destino la dejo para el final ya que hay que hacer ARP */
+    sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*) lsu_packet;
+    memcpy(eth_hdr->ether_shost, (uint8_t*) lsu_param->interface->addr, sizeof(uint8_t) * ETHER_ADDR_LEN);
+    eth_hdr->ether_type = htons(ethertype_ip);
 
     /* Inicializo cabezal IP*/
     /* La IP destino es la del vecino contectado a mi interfaz*/
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)((uint8_t*)eth_hdr + sizeof(sr_ethernet_hdr_t));
+    ip_hdr->ip_tos = 0;
+    ip_hdr->ip_ttl = 16;
+    ip_hdr->ip_hl = 5;
+    ip_hdr->ip_v = 4;
+    ip_hdr->ip_off = 0;
+    ip_hdr->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(ospfv2_hdr_t) + sizeof(ospfv2_lsu_hdr_t) + sizeof(ospfv2_lsa_t)*cantidad_rutas);
+    ip_hdr->ip_p = ip_protocol_ospfv2;
+    ip_hdr->ip_src = lsu_param->interface->ip;
+    ip_hdr->ip_dst = lsu_param->interface->neighbor_ip;
+    ip_hdr->ip_id = htons(ip_id_counter++);
+    ip_hdr->ip_sum = ip_cksum(ip_hdr, ip_hdr->ip_hl*4);
    
     /* Inicializo cabezal de OSPF*/
+    ospfv2_hdr_t* ospf_hdr = (ospfv2_hdr_t*)((uint8_t*)ip_hdr + sizeof(sr_ip_hdr_t));
+    ospf_hdr->version = OSPF_V2;
+    ospf_hdr->type = OSPF_TYPE_LSU;
+    ospf_hdr->len = sizeof(ospfv2_hdr_t) + sizeof(ospfv2_lsu_hdr_t) + sizeof(ospfv2_lsa_t)*cantidad_rutas;
+    ospf_hdr->rid = g_router_id.s_addr;
+
+
 
     /* Seteo el número de secuencia y avanzo*/
+    g_sequence_num++;
     /* Seteo el TTL en 64 y el resto de los campos del cabezal de LSU */
     /* Seteo el número de anuncios con la cantidad de rutas a enviar. Uso función count_routes */
 
@@ -411,6 +443,7 @@ void* send_lsu(void* arg)
     /* Envío el paquete si obtuve la MAC o lo guardo en la cola para cuando tenga la MAC*/
    
    /* Libero memoria */
+   free(lsu_param);
 
     return NULL;
 } /* -- send_lsu -- */
