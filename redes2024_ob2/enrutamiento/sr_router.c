@@ -126,45 +126,6 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   free(icmp_packet);
 } /* -- sr_send_icmp_error_packet -- */
 
-void sr_process_pwospf_packet(struct sr_instance *sr,  
-                             uint8_t *packet, 
-                             unsigned int len, 
-                             uint8_t *destAddr, 
-                             struct sr_if *iface) 
-{    
-  sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-
-  /* Aceptar solo si la dirección IP de destino es OSPF_AllSPFRouters y la MAC coincide */
-  if (ip_hdr->ip_dst == htonl(OSPF_AllSPFRouters) && 
-    memcmp(destAddr, sr_multicast_mac, ETHER_ADDR_LEN) == 0) {
-
-    /* Determinar el tipo de mensaje PWOSPF (HELLO o LSU) */
-    ospfv2_hdr_t *ospf_hdr = (ospfv2_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + + sizeof(sr_ip_hdr_t));
-
-    if (ospf_hdr->type == OSPF_TYPE_HELLO) {
-        printf("Recibido mensaje PWOSPF HELLO\n");
-        sr_handle_pwospf_hello_packet(sr, packet, len, iface);
-    } else if (ospf_hdr->type == OSPF_TYPE_LSU) {
-        printf("Recibido mensaje PWOSPF LSU\n");
-
-        powspf_rx_lsu_param_t* rx_lsu_param = malloc(sizeof(powspf_rx_lsu_param_t));
-        rx_lsu_param->sr = sr;
-        rx_lsu_param->length = len;
-        rx_lsu_param->rx_if = iface;
-        memcpy(rx_lsu_param->packet, packet, len);
-
-        /* TODO: hace falta crear thread acá? */
-        pthread_t lsu_thread;
-        pthread_create(&lsu_thread, NULL, sr_handle_pwospf_lsu_packet, rx_lsu_param);
-        pthread_detach(lsu_thread);
-    } else {
-      printf("Tipo de paquete PWOSPF desconocido: %d\n", ospf_hdr->type);
-    }
-  } else {
-      printf("Descartando paquete PWOSPF: dirección MAC o IP no coincide\n");
-  }
-}
-
 void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del router */ 
         uint8_t *packet /* lent */,               /* Puntero al paquete recibido (paquete IP) */ 
         unsigned int len,                         /* Longitud total del paquete (en bytes) */ 
@@ -184,7 +145,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
   if (protocol == ip_protocol_ospfv2) {
     /* Llamar al manejador de paquetes PWOSPF */
     struct sr_if* recv_iface = sr_get_interface(sr, interface);
-    sr_process_pwospf_packet(sr, packet, len, destAddr, recv_iface);
+    sr_handle_pwospf_packet(sr, packet, len, recv_iface);
     return;  /* Termina aquí si es un paquete PWOSPF */
   }
 
