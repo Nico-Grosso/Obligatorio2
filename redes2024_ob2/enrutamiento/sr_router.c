@@ -145,6 +145,7 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
   if (protocol == ip_protocol_ospfv2) {
     /* Llamar al manejador de paquetes PWOSPF */
     struct sr_if* recv_iface = sr_get_interface(sr, interface);
+    print_hdr_ospf(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
     sr_handle_pwospf_packet(sr, packet, len, recv_iface);
     return;  /* Termina aquí si es un paquete PWOSPF */
   }

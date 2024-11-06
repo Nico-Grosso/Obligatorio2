@@ -45,8 +45,6 @@ struct ospfv2_neighbor* g_neighbors;
 struct pwospf_topology_entry* g_topology;
 uint16_t g_sequence_num;
 
-static uint16_t ip_id_counter = 0;
-
 /* -- Declaración de hilo principal de la función del subsistema pwospf --- */
 static void* pwospf_run_thread(void* arg);
 
