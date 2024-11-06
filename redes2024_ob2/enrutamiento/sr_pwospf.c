@@ -395,7 +395,7 @@ void* send_hello_packet(void* arg)
     hello_hdr->nmask = iface->mask;
     
     /* Seteo Hello Interval con OSPF_DEFAULT_HELLOINT */
-    hello_hdr->helloint = htons(OSPF_DEFAULT_HELLOINT);
+    hello_hdr->helloint = OSPF_DEFAULT_HELLOINT;
     
     /* Seteo Padding en 0*/
     hello_hdr->padding = 0;
