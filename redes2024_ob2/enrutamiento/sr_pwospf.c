@@ -633,10 +633,6 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
 
     /* Seteo el vecino en la interfaz por donde llegó y actualizo la lista de vecinos */
     int es_nuevo = 0;
-    printf("==============================================");
-    /* printf("ROUTER ID: %s", inet_ntoa(ospfv2_hdr->rid)); */
-    /* printf("NEIGHBOR ID: %s", inet_ntoa(rx_if->neighbor_id)); */
-    printf("==============================================");
     if (rx_if->neighbor_id != ospfv2_hdr->rid){ /* si el neighbor_id = 0 es porque no estaba guaradado ese vecino*/
         es_nuevo = 1;
         rx_if->neighbor_id = ospfv2_hdr->rid;
@@ -729,7 +725,7 @@ void* sr_handle_pwospf_lsu_packet(void* arg)
     next_hop.s_addr = ip_hdr->ip_src;
 
     unsigned int i;
-    for (i = 0; i < htonl(lsu_hdr->num_adv); i++) {
+    for (i = 0; i < ntohl(lsu_hdr->num_adv); i++) {
         ospfv2_lsa_t* lsa = (ospfv2_lsa_t*)(lsa_ptr + (i * sizeof(ospfv2_lsa_t)));
         
         struct in_addr net_num, net_mask, neighbor_id;
