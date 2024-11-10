@@ -32,7 +32,12 @@ ARCH = -D_DARWIN_
 SOCK = -lresolv
 endif
 
-CFLAGS = -g -Wall -ansi -D_DEBUG_ -D_GNU_SOURCE $(ARCH)
+DEBUG ?= 1
+ifeq ($(DEBUG), 1)
+    CFLAGS = -g -Wall -ansi -D_DEBUG_ -D_GNU_SOURCE $(ARCH)
+else
+    CFLAGS= -g -Wall -ansi -D_GNU_SOURCE $(ARCH)
+endif
 
 LIBS= $(SOCK) -lm -lpthread
 PFLAGS= -follow-child-processes=yes -cache-dir=/tmp/${USER} 
