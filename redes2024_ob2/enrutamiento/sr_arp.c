@@ -34,6 +34,5 @@ void sr_handle_arp_lookup(struct sr_instance *sr, uint8_t *packet, unsigned int 
         /* No se encontró entrada ARP, es necesario poner en cola el paquete y enviar una solicitud ARP */
         printf("No se encontró entrada ARP, enviando solicitud ARP\n");
         struct sr_arpreq* req = sr_arpcache_queuereq(&(sr->cache), next_hop_ip, packet, len, interface);
-        handle_arpreq(sr, req);
     }
 } /* -- sr_handle_arp_lookup -- */
