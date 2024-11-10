@@ -102,7 +102,7 @@ void sr_send_icmp_echo_request(struct sr_instance *sr, uint8_t *packet, struct s
     unsigned int icmp_len = sizeof(sr_ethernet_hdr_t) + ntohs(ip_icmp_len->ip_len);
 
     sr_handle_arp_lookup(sr, icmp_packet, icmp_len, next_hop_ip, matching_rt_entry->interface);
-    print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    /*print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));*/
     free(icmp_packet);
 } /* -- sr_send_icmp_echo_request -- */
 
@@ -122,7 +122,7 @@ void sr_send_icmp_error_packet(uint8_t type,          /* Tipo de mensaje ICMP */
   uint32_t next_hop_ip = (matching_rt_entry->gw.s_addr != 0) ? matching_rt_entry->gw.s_addr : ipDst;   
 
   sr_handle_arp_lookup(sr, icmp_packet, icmp_len_t3, next_hop_ip, matching_rt_entry->interface);
-  print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+  /*print_hdr_icmp(icmp_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));*/
   free(icmp_packet);
 } /* -- sr_send_icmp_error_packet -- */
 
@@ -136,9 +136,11 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
 {                
   sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)); /* cabecera IP */
 
+  /*
   printf("RECIBIDO\n");
   print_hdr_eth(packet);
   print_hdr_ip(packet + sizeof(sr_ethernet_hdr_t));
+  */
 
   /* Verificar si el paquete es PWOSPF */
   uint8_t protocol = ip_protocol((uint8_t *) ip_hdr); /* que protocolo llega en el paquete (ICMP, TCP, OSPF, etc) */  
@@ -161,9 +163,11 @@ void sr_handle_ip_packet(struct sr_instance *sr,  /* Puntero a la instancia del 
       sr_icmp_hdr_t* icmp_hdr = (sr_icmp_hdr_t*)((uint8_t *)ip_hdr + (ip_hdr->ip_hl * 4)); /* accedo al header del ICMP */ 
 
       if (protocol == ip_protocol_icmp && icmp_hdr->icmp_type == icmp_echo_request) { /* verificamos si el paquete es ECHO REQUEST */  
+        /*
         printf("Print de hdr_icmp del paquete de entrada\n");
         print_hdr_icmp(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
         printf("Recibido ICMP echo request, respondiendo con echo reply\n");
+        */
 
         sr_send_icmp_echo_request(sr, packet, dest_iface);       
       } else { /*es cualquier otro paquete, enviar ICMP error*/         
