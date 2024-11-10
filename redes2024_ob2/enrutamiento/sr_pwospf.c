@@ -585,11 +585,13 @@ void* send_lsu(void* arg)
 
 void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsigned int length, struct sr_if* rx_if)
 {
-
+    
     /* Obtengo información del paquete recibido */
     sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
     ospfv2_hdr_t* ospfv2_hdr = ((ospfv2_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)));
     ospfv2_hello_hdr_t* ospfv2_hello_hdr =(ospfv2_hello_hdr_t*) ((uint8_t*)ospfv2_hdr + sizeof(ospfv2_hdr_t));
+
+    sr_print_routing_table(sr);
 
     struct in_addr neighbor_id;
     neighbor_id.s_addr = ospfv2_hdr->rid;
