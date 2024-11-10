@@ -753,6 +753,7 @@ void* sr_handle_pwospf_lsu_packet(void* arg)
     dijkstra_param_t* dij_param = (dijkstra_param_t*)(malloc(sizeof(dijkstra_param_t)));
     dij_param->sr = sr;
     dij_param->topology = g_topology;
+    dij_param->mutex = g_dijkstra_mutex;
     pthread_create(&g_dijkstra_thread, NULL, run_dijkstra, dij_param);
 
     /* Flooding del LSU por todas las interfaces menos por donde me llegó */
