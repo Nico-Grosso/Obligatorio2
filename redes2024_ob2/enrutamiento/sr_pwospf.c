@@ -198,6 +198,96 @@ void* pwospf_run_thread(void* arg)
  * *********************************************************************************/
 
 /*---------------------------------------------------------------------
+ *
+ * Métodos auxiliares
+ *
+ *---------------------------------------------------------------------*/
+
+uint8_t remove_topology_entries_by_neighbors(struct pwospf_topology_entry* topology, struct ospfv2_neighbor* dead_neighbors)
+{
+    uint8_t topology_changed = 0;
+    struct pwospf_topology_entry* current = topology;
+    struct pwospf_topology_entry* prev = NULL;
+    Debug("\n===================================================");
+    Debug("\nREMOVIENDO VECINO DE LA TOPOLOGIA");
+    Debug("\n===================================================");
+    while (current != NULL)
+    {
+        struct ospfv2_neighbor* neighbor_ptr = dead_neighbors;
+        uint8_t entry_removed = 0;
+
+        while (neighbor_ptr != NULL)
+        {
+            if (current->router_id.s_addr == neighbor_ptr->neighbor_id.s_addr)
+            {
+                /* Remover entrada de la topologia */
+                if (prev != NULL)
+                    prev->next = current->next;
+                else
+                    topology = current->next; /* Ajustar head si necesario */
+
+                struct pwospf_topology_entry* temp = current;
+                current = current->next;
+
+                free(temp);
+                topology_changed = 1;
+                entry_removed = 1;
+                break;
+            }
+            neighbor_ptr = neighbor_ptr->next;
+        }
+
+        if (!entry_removed)
+        {
+            prev = current;
+            current = current->next;
+        }
+    }
+
+    return topology_changed;
+}
+
+void flood_lsu(struct sr_instance* sr)
+{
+    struct sr_if* iface = sr->if_list;
+    while (iface != NULL)
+    {
+        /*-- Si tiene estas ID es porque no es un vecino inicializado-- */
+        if (iface->neighbor_id != NEIGHBOR_ID_UNITIALIZED && iface->neighbor_id != NEIGHBOR_ID_BROADCAST) 
+        {
+            powspf_hello_lsu_param_t* lsu_param = malloc(sizeof(powspf_hello_lsu_param_t));
+            lsu_param->interface = iface;
+            lsu_param->sr = sr;
+            pthread_create(&g_lsu_thread, NULL, send_lsu, lsu_param);
+        }
+        iface = iface->next;
+    }
+}
+
+void run_dijkstra_in_thread(struct sr_instance* sr)
+{
+    dijkstra_param_t* dij = malloc(sizeof(dijkstra_param_t));
+    dij->sr = sr;
+    dij->topology = g_topology;
+    dij->rid = g_router_id;
+    dij->mutex = g_dijkstra_mutex;
+
+    pthread_create(&g_dijkstra_thread, NULL, run_dijkstra, dij);
+}
+
+void free_neighbor_list(struct ospfv2_neighbor* removed_neighbors)
+{
+    struct ospfv2_neighbor* current = removed_neighbors;
+
+    while (current != NULL)
+    {
+        struct ospfv2_neighbor* next = current->next;
+        free(current);
+        current = next;
+    }
+}
+
+/*---------------------------------------------------------------------
  * Method: check_neighbors_life
  *
  * Chequea si los vecinos están vivos
@@ -215,11 +305,26 @@ void* check_neighbors_life(void* arg)
 
     while (1){
         usleep(1000000);
-        check_neighbors_alive(g_neighbors);
+
+        struct ospfv2_neighbor* removed_neighbors = check_neighbors_alive(g_neighbors);
+
+        if (removed_neighbors != NULL){ /* Uno o más vecinos fue removido */
+            Debug("PWOSPF: Neighbor(s) declared dead, updating topology and flooding LSUs\n");
+
+            /* Remover entradas en la topologia de vecinos inactivos */
+            uint8_t topology_changed = remove_topology_entries_by_neighbors(g_topology, removed_neighbors);
+
+            flood_lsu(sr);
+
+            if (topology_changed) {
+                run_dijkstra_in_thread(sr);
+            }
+
+            free_neighbor_list(removed_neighbors);
+        }
     }
     return NULL;
 } /* -- check_neighbors_life -- */
-
 
 /*---------------------------------------------------------------------
  * Method: check_topology_entries_age
@@ -244,12 +349,7 @@ void* check_topology_entries_age(void* arg)
             print_topolgy_table(g_topology);
             Debug("\n");      
 
-            dijkstra_param_t* dij = malloc(sizeof(dijkstra_param_t));
-            dij->sr = sr;
-            dij->topology = g_topology;
-            dij->rid = g_router_id;
-            
-            pthread_create(&g_dijkstra_thread, NULL, run_dijkstra, dij);
+            run_dijkstra_in_thread(sr);
 
             /* TODO: revisar si esto es necesario */
             /* free(dij); */
@@ -650,16 +750,7 @@ void sr_handle_pwospf_hello_packet(struct sr_instance* sr, uint8_t* packet, unsi
         /* Recorro todas las interfaces para enviar el paquete LSU */
         /* Si la interfaz tiene un vecino, envío un LSU */
     if (es_nuevo){
-        struct sr_if* interface = sr->if_list;
-        while (interface != NULL){
-            if (interface->neighbor_id != NEIGHBOR_ID_UNITIALIZED && interface->neighbor_id !=  NEIGHBOR_ID_BROADCAST){ /*-- Si tiene estas ID es porque no es un vecino inicializado-- */
-                powspf_hello_lsu_param_t* lsu_param = (powspf_hello_lsu_param_t*)(malloc(sizeof(powspf_hello_lsu_param_t)));
-                lsu_param->interface = interface;
-                lsu_param->sr = sr;
-                pthread_create(&g_lsu_thread, NULL, send_lsu, lsu_param);
-            }
-            interface = interface->next;
-        }
+        flood_lsu(sr);
     }
 
 } /* -- sr_handle_pwospf_hello_packet -- */
@@ -753,11 +844,7 @@ void* sr_handle_pwospf_lsu_packet(void* arg)
     print_topolgy_table(g_topology);
     
     /* Ejecuto Dijkstra en un nuevo hilo (run_dijkstra)*/
-    dijkstra_param_t* dij_param = (dijkstra_param_t*)(malloc(sizeof(dijkstra_param_t)));
-    dij_param->sr = sr;
-    dij_param->topology = g_topology;
-    dij_param->mutex = g_dijkstra_mutex;
-    pthread_create(&g_dijkstra_thread, NULL, run_dijkstra, dij_param);
+    run_dijkstra_in_thread(sr);
 
     /* Flooding del LSU por todas las interfaces menos por donde me llegó */
     struct sr_if* iface = sr->if_list;
