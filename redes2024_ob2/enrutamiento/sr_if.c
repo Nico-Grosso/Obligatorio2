@@ -108,6 +108,7 @@ void sr_add_interface(struct sr_instance* sr, const char* name)
         sr->if_list->neighbor_id = 0;
         sr->if_list->neighbor_ip = 0;
         sr->if_list->helloint = 0;
+        sr->if_list->is_active = 1;  /* interfaz activa */
         strncpy(sr->if_list->name,name,sr_IFACE_NAMELEN);
         return;
     }
@@ -125,6 +126,7 @@ void sr_add_interface(struct sr_instance* sr, const char* name)
     strncpy(if_walker->name,name,sr_IFACE_NAMELEN);
     if_walker->next = 0;
     if_walker->helloint = 0;
+    if_walker->is_active = 1;  /* interfaz activa */
 } /* -- sr_add_interface -- */ 
 
 /*--------------------------------------------------------------------- 
@@ -251,3 +253,28 @@ void sr_print_if(struct sr_if* iface)
     Debug("\n");
     Debug("\tinet addr %s\n",inet_ntoa(ip_addr));
 } /* -- sr_print_if -- */
+
+/*--------------------------------------------------------------------- 
+ * Método: toggle_interface_active_state_by_ip(..)
+ * Alcance: Global
+ *
+ * Alterna el estado `is_active` de una interfaz de red en función de 
+ * la dirección IP proporcionada. Si se encuentra la interfaz, su estado 
+ * de activación se cambia (de activo a inactivo o viceversa), y el nuevo 
+ * estado se imprime en stdout. Si no se encuentra una interfaz que coincida, 
+ * se imprime un mensaje para indicar esto.
+ *
+ *---------------------------------------------------------------------*/
+
+void toggle_interface_active_state_by_ip(struct sr_instance* sr, uint32_t ip) {
+    struct sr_if* iface = sr_get_interface_given_ip(sr, ip);
+
+    if (iface) {
+        iface->is_active = !iface->is_active;
+        printf("Interface with IP %s is now %s\n",
+               inet_ntoa(*(struct in_addr*)&ip),
+               iface->is_active ? "active" : "inactive");
+    } else {
+        printf("No interface found with IP %s\n", inet_ntoa(*(struct in_addr*)&ip));
+    }
+}

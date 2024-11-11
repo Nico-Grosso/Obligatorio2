@@ -291,6 +291,11 @@ void* send_hellos(void* arg)
             /* Reiniciar el contador de segundos para HELLO */
         struct sr_if* iface = sr->if_list;
         while (iface) {
+            if (iface->is_active == 0) {
+                iface = iface->next;
+                continue;
+            }
+
             if (iface->helloint == 0){
                 /* Estructura de parámetros para el hilo */
                 struct powspf_hello_lsu_param* hello_param = (struct powspf_hello_lsu_param*)malloc(sizeof(struct powspf_hello_lsu_param));
@@ -447,6 +452,10 @@ void* send_all_lsu(void* arg)
         /* Recorro todas las interfaces para enviar el paquete LSU */
         struct sr_if* iface = sr->if_list;
         while (iface) {
+            if (iface->is_active == 0) {
+                iface = iface->next;
+                continue;
+            }
             /* Recorro la lista de vecinos para ver si hay un vecino activo en esta interfaz */
             struct ospfv2_neighbor* neighbor = g_neighbors;
             while (neighbor) {
