@@ -203,50 +203,6 @@ void* pwospf_run_thread(void* arg)
  *
  *---------------------------------------------------------------------*/
 
-uint8_t remove_topology_entries_by_neighbors(struct pwospf_topology_entry* topology, struct ospfv2_neighbor* dead_neighbors)
-{
-    uint8_t topology_changed = 0;
-    struct pwospf_topology_entry* current = topology;
-    struct pwospf_topology_entry* prev = NULL;
-    Debug("\n===================================================");
-    Debug("\nREMOVIENDO VECINO DE LA TOPOLOGIA");
-    Debug("\n===================================================");
-    while (current != NULL)
-    {
-        struct ospfv2_neighbor* neighbor_ptr = dead_neighbors;
-        uint8_t entry_removed = 0;
-
-        while (neighbor_ptr != NULL)
-        {
-            if (current->router_id.s_addr == neighbor_ptr->neighbor_id.s_addr)
-            {
-                /* Remover entrada de la topologia */
-                if (prev != NULL)
-                    prev->next = current->next;
-                else
-                    topology = current->next; /* Ajustar head si necesario */
-
-                struct pwospf_topology_entry* temp = current;
-                current = current->next;
-
-                free(temp);
-                topology_changed = 1;
-                entry_removed = 1;
-                break;
-            }
-            neighbor_ptr = neighbor_ptr->next;
-        }
-
-        if (!entry_removed)
-        {
-            prev = current;
-            current = current->next;
-        }
-    }
-
-    return topology_changed;
-}
-
 void flood_lsu(struct sr_instance* sr)
 {
     struct sr_if* iface = sr->if_list;
@@ -311,15 +267,8 @@ void* check_neighbors_life(void* arg)
         if (removed_neighbors != NULL){ /* Uno o más vecinos fue removido */
             Debug("PWOSPF: Neighbor(s) declared dead, updating topology and flooding LSUs\n");
 
-            /* Remover entradas en la topologia de vecinos inactivos */
-            uint8_t topology_changed = remove_topology_entries_by_neighbors(g_topology, removed_neighbors);
-
-            flood_lsu(sr);
-
-            if (topology_changed) {
-                run_dijkstra_in_thread(sr);
-            }
-
+            flood_lsu(sr);            
+            run_dijkstra_in_thread(sr);            
             free_neighbor_list(removed_neighbors);
         }
     }
