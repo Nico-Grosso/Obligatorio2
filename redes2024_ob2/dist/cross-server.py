@@ -4,8 +4,8 @@ def test_client():
     print('=============================')
     print('Iniciando pruebas de casos sin errores (S1).')
 
-    connS1 = connect('150.150.0.2', 8080)
-    connS3 = connect('150.150.0.2', 8080)
+    connS1 = connect('200.0.0.10', 8080)
+    connS3 = connect('200.0.0.10', 8080)
     
     result = connS1.add(5,3)
     assert result == 8
@@ -83,8 +83,8 @@ def test_client():
     print('=============================')
     print('Iniciando pruebas de casos sin errores (S2).')
 
-    connS2 = connect('100.100.0.2', 8080)
-    connS4 = connect('100.100.0.2', 8080)
+    connS2 = connect('200.100.0.15', 8080)
+    connS4 = connect('200.100.0.15', 8080)
 
     result = connS2.is_sum_even(3,4)
     assert result == False

@@ -12,10 +12,11 @@ sh sleep 2
 sh echo "=========================================="
 sh echo "Ejecutando test-server.py y test-client.py"
 sh echo "=========================================="
-server1 python3.8 test-server.py &
-server2 python3.8 test-server.py &
-sh sleep 3
-client python3.8 dist/test-client.py
+sh pkill -9 -f test-server
+server1 nohup python3.8 test-server.py &
+server2 nohup python3.8 test-server.py &
+sh sleep 5
+client nohup python3.8 dist/test-client.py
 
 sh echo "================================"
 sh echo "Finalizando capturas de tráfico"
