@@ -808,16 +808,24 @@ void* sr_handle_pwospf_lsu_packet(void* arg)
 
             /* Ajusto paquete IP, origen y checksum*/
             ip_hdr->ip_src = iface->ip;
+            ip_hdr->ip_dst = iface->neighbor_ip;
             ip_hdr->ip_sum = ip_cksum(ip_hdr, sizeof(sr_ip_hdr_t));
 
             /* Ajusto cabezal OSPF: checksum y TTL*/
             lsu_hdr->ttl--;
 
+            if (lsu_hdr->ttl == 0){
+                iface = NULL;
+                continue;
+            }
+
             /* checksum OSPF */
             ospf_hdr->csum = ospfv2_cksum(ospf_hdr, htons(ospf_hdr->len));
             
             /* Envío el paquete*/
-            sr_send_packet(sr, packet, length, iface->name);
+            /* sr_send_packet(sr, packet, length, iface->name);*/
+            sr_handle_arp_lookup(rx_lsu_param->sr, packet, length, iface->neighbor_ip, iface->name);
+
         }
         iface = iface->next;
     }
